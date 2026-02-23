@@ -18,6 +18,7 @@ import {
   getBookingById,
   getBookingDetailsByBookingId,
   getBookingsByDateRange,
+  getBookingsOnDay,
   getDmlvEventsByDateRange,
   getPendingReminders,
   markReminderSent,
@@ -67,19 +68,70 @@ export const appRouter = router({
           eventName: z.string().min(1),
           eventType: z.enum(["wedding", "funeral", "mass", "concert", "other"]),
           eventDate: z.number(),
-          startTime: z.string(),
-          endTime: z.string().optional(),
+          startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
+          endTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
           location: z.string().optional(),
           notes: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
+        // Helper: convert "HH:MM" to total minutes
+        const toMins = (t: string) => {
+          const [h, m] = t.split(":").map(Number);
+          return h * 60 + m;
+        };
+        const startMins = toMins(input.startTime);
+        const endMins = toMins(input.endTime);
+
+        // Enforce minimum 3-hour duration
+        if (endMins - startMins < 180) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Thời gian tối thiểu là 3 giờ / Minimum duration is 3 hours",
+          });
+        }
+        if (endMins <= startMins) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Giờ kết thúc phải sau giờ bắt đầu / End time must be after start time",
+          });
+        }
+
+        // Check for time-slot overlaps on the same day
+        const existingOnDay = await getBookingsOnDay(input.eventDate);
+        for (const existing of existingOnDay) {
+          if (!existing.endTime) continue;
+          const exStart = toMins(existing.startTime);
+          const exEnd = toMins(existing.endTime);
+          // Overlap: new slot starts before existing ends AND new slot ends after existing starts
+          if (startMins < exEnd && endMins > exStart) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Khung giờ ${input.startTime}–${input.endTime} bị trùng với sự kiện "${existing.eventName}" (${existing.startTime}–${existing.endTime}). Vui lòng chọn khung giờ khác. / Time slot ${input.startTime}–${input.endTime} overlaps with "${existing.eventName}" (${existing.startTime}–${existing.endTime}).`,
+            });
+          }
+        }
+
         const id = await createBooking(input);
         await notifyOwner({
           title: "Yêu cầu đặt lịch mới / New Booking Request",
-          content: `${input.requesterName} đã yêu cầu đặt lịch cho sự kiện "${input.eventName}" vào ngày ${new Date(input.eventDate).toLocaleDateString("vi-VN")}.`,
+          content: `${input.requesterName} đã yêu cầu đặt lịch cho sự kiện "${input.eventName}" vào ngày ${new Date(input.eventDate).toLocaleDateString("vi-VN")} lúc ${input.startTime}–${input.endTime}.`,
         });
         return { id };
+      }),
+
+    // Return booked time slots for a specific day (for the time picker to show taken slots)
+    getTimeSlotsForDay: publicProcedure
+      .input(z.object({ dayMs: z.number() }))
+      .query(async ({ input }) => {
+        const bookingsOnDay = await getBookingsOnDay(input.dayMs);
+        return bookingsOnDay.map((b) => ({
+          id: b.id,
+          eventName: b.eventName,
+          startTime: b.startTime,
+          endTime: b.endTime ?? "",
+          status: b.status,
+        }));
       }),
 
     updateStatus: adminProcedure

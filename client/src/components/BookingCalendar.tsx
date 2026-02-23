@@ -86,8 +86,8 @@ export default function BookingCalendar() {
     setSelectedDate(day);
     const key = format(day, "yyyy-MM-dd");
     const events = eventMap.get(key) ?? [];
-    const hasApprovedBooking = events.some((e) => e.type === "booking" && e.status === "approved");
-    if (hasApprovedBooking || events.some((e) => e.type === "dmlv")) {
+    // Always show day detail first if there are any events; user can then add a new booking
+    if (events.length > 0) {
       setShowDayDetail(true);
     } else {
       setShowBookingForm(true);
@@ -190,21 +190,26 @@ export default function BookingCalendar() {
                   {format(day, "d")}
                 </div>
 
-                {/* Event dots/chips */}
+                {/* Event chips — show ALL events for the day */}
                 <div className="space-y-0.5">
-                  {hasDmlv && (
-                    <div className="text-[10px] font-['Be_Vietnam_Pro'] bg-[var(--gold)/20] text-[var(--gold-dark)] rounded px-1 py-0.5 truncate border-l-2 border-[var(--gold)] leading-tight">
-                      {events.find((e) => e.type === "dmlv")?.title}
+                  {events.slice(0, 3).map((event, ei) => (
+                    <div
+                      key={ei}
+                      className={`text-[10px] font-['Be_Vietnam_Pro'] rounded px-1 py-0.5 truncate border-l-2 leading-tight ${
+                        event.type === "dmlv"
+                          ? "bg-[var(--gold)/20] text-[var(--gold-dark)] border-[var(--gold)]"
+                          : event.status === "approved"
+                          ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500"
+                          : "bg-amber-500/15 text-amber-600 border-amber-500"
+                      }`}
+                    >
+                      {event.startTime && <span className="opacity-70 mr-0.5">{event.startTime}</span>}
+                      {event.title}
                     </div>
-                  )}
-                  {hasApproved && (
-                    <div className="text-[10px] font-['Be_Vietnam_Pro'] bg-red-500/15 text-red-600 dark:text-red-400 rounded px-1 py-0.5 truncate border-l-2 border-red-500 leading-tight">
-                      {events.find((e) => e.type === "booking" && e.status === "approved")?.title}
-                    </div>
-                  )}
-                  {hasPending && !hasApproved && (
-                    <div className="text-[10px] font-['Be_Vietnam_Pro'] bg-amber-500/15 text-amber-600 rounded px-1 py-0.5 truncate border-l-2 border-amber-500 leading-tight">
-                      {lang === "vi" ? "Chờ duyệt" : "Pending"}
+                  ))}
+                  {events.length > 3 && (
+                    <div className="text-[10px] font-['Be_Vietnam_Pro'] text-muted-foreground px-1">
+                      +{events.length - 3} {lang === "vi" ? "nữa" : "more"}
                     </div>
                   )}
                 </div>
@@ -269,12 +274,19 @@ export default function BookingCalendar() {
                 </div>
               </div>
             ))}
-            <Button
-              className="w-full bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold mt-2"
-              onClick={() => { setShowDayDetail(false); setShowBookingForm(true); }}
-            >
-              {t(lang, "hero_cta_book")}
-            </Button>
+            <div className="pt-2 border-t border-border mt-2">
+              <p className="font-['Be_Vietnam_Pro'] text-xs text-muted-foreground mb-2">
+                {lang === "vi"
+                  ? "Ngày này có thể có nhiều sự kiện. Bạn có thể đặt thêm khung giờ trống."
+                  : "Multiple events can be booked on the same day in different time slots."}
+              </p>
+              <Button
+                className="w-full bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold"
+                onClick={() => { setShowDayDetail(false); setShowBookingForm(true); }}
+              >
+                {t(lang, "hero_cta_book")}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

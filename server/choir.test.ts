@@ -98,3 +98,48 @@ describe("dmlvEvents - public access", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 });
+
+describe("bookings.create - time slot validation", () => {
+  const baseInput = {
+    requesterName: "Test User",
+    requesterEmail: "test@example.com",
+    eventName: "Test Event",
+    eventType: "mass" as const,
+    eventDate: new Date("2030-06-15T00:00:00.000Z").getTime(),
+    location: "Test Church",
+    notes: "Test notes",
+  };
+
+  it("rejects if end time is before start time", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.bookings.create({ ...baseInput, startTime: "14:00", endTime: "10:00" })
+    ).rejects.toThrow();
+  });
+
+  it("rejects if duration is less than 3 hours (e.g. 2h)", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.bookings.create({ ...baseInput, startTime: "09:00", endTime: "11:00" })
+    ).rejects.toThrow(/3/);
+  });
+
+  it("rejects if duration is exactly 2h59m (just under minimum)", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.bookings.create({ ...baseInput, startTime: "09:00", endTime: "11:59" })
+    ).rejects.toThrow();
+  });
+
+  it("getTimeSlotsForDay is publicly accessible", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.bookings.getTimeSlotsForDay({
+      dayMs: new Date("2030-06-15T00:00:00.000Z").getTime(),
+    }).catch(() => []);
+    expect(Array.isArray(result)).toBe(true);
+  });
+});

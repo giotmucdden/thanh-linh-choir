@@ -46,3 +46,11 @@
 - [ ] Event photo upload by admin
 - [ ] PDF setlist viewer inline
 - [ ] Automated weekly cron reminders (background job service)
+
+## Multi-Slot Booking Update
+- [x] Update bookings schema: add startTime + endTime columns (stored as HH:MM strings)
+- [x] Update getBookingsByDateRange query to return time slots per day
+- [x] Update booking router: validate no time overlap on same day, enforce 3-hour minimum
+- [x] Update BookingCalendar: show multiple booked slots per day cell
+- [x] Update BookingForm: time slot picker (start time + end time, min 3 hours, validates overlap)
+- [x] Update Admin panel booking list to show time slots

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   Booking,
@@ -86,6 +86,29 @@ export async function getBookingsByDateRange(startMs: number, endMs: number): Pr
   const db = await getDb();
   if (!db) return [];
   return db.select().from(bookings).where(and(gte(bookings.eventDate, startMs), lte(bookings.eventDate, endMs)));
+}
+
+/**
+ * Returns all non-rejected bookings on a specific day (UTC ms date).
+ * Used to check for time-slot overlaps before creating a new booking.
+ */
+export async function getBookingsOnDay(dayMs: number): Promise<Booking[]> {
+  const db = await getDb();
+  if (!db) return [];
+  // dayMs is the start-of-day UTC ms; match all bookings whose eventDate falls on the same calendar date
+  const dayStart = dayMs;
+  const dayEnd = dayMs + 24 * 60 * 60 * 1000 - 1;
+  return db
+    .select()
+    .from(bookings)
+    .where(
+      and(
+        gte(bookings.eventDate, dayStart),
+        lte(bookings.eventDate, dayEnd),
+        // exclude rejected bookings
+        sql`${bookings.status} != 'rejected'`
+      )
+    );
 }
 
 export async function getBookingById(id: number): Promise<Booking | undefined> {
