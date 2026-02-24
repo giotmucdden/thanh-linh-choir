@@ -1,20 +1,22 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Music } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Menu, X, Music, Shield } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 
 export default function Navbar() {
   const { lang, toggle } = useLang();
-  const { user, isAuthenticated } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [location] = useLocation();
-  const logout = trpc.auth.logout.useMutation({ onSuccess: () => window.location.reload() });
+
+  // Check if current session is admin (no Manus OAuth needed)
+  const { data: adminStatus } = trpc.admin.check.useQuery(undefined, {
+    retry: false,
+    staleTime: 60_000,
+  });
+  const isAdmin = adminStatus?.isAdmin ?? false;
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -29,8 +31,6 @@ export default function Navbar() {
     { href: "/#booking", label: t(lang, "nav_booking") },
     { href: "/#events", label: t(lang, "nav_events") },
   ];
-
-  const isAdmin = user?.role === "admin";
 
   return (
     <nav
@@ -75,8 +75,9 @@ export default function Navbar() {
             {isAdmin && (
               <Link
                 href="/admin"
-                className="px-4 py-2 text-sm font-['Be_Vietnam_Pro'] font-medium tracking-wide text-[var(--gold)] hover:text-white transition-colors rounded-md"
+                className="px-4 py-2 text-sm font-['Be_Vietnam_Pro'] font-medium tracking-wide text-[var(--gold)] hover:text-white transition-colors rounded-md flex items-center gap-1"
               >
+                <Shield className="w-3.5 h-3.5" />
                 {t(lang, "nav_admin")}
               </Link>
             )}
@@ -94,23 +95,15 @@ export default function Navbar() {
               <span className={lang === "en" ? "text-[var(--gold)]" : "text-white/50"}>EN</span>
             </button>
 
-            {isAuthenticated ? (
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-white/30 text-white hover:bg-white/10 hover:text-white font-['Be_Vietnam_Pro'] text-xs"
-                onClick={() => logout.mutate()}
+            {/* Admin link (subtle, for admins only) */}
+            {!isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1 px-3 py-1.5 text-white/30 hover:text-[var(--gold)] transition-colors text-xs font-['Be_Vietnam_Pro']"
+                title={lang === "vi" ? "Quản trị" : "Admin"}
               >
-                {t(lang, "nav_logout")}
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold text-xs tracking-wide"
-                onClick={() => (window.location.href = getLoginUrl())}
-              >
-                {t(lang, "nav_login")}
-              </Button>
+                <Shield className="w-3.5 h-3.5" />
+              </Link>
             )}
           </div>
 
@@ -146,35 +139,14 @@ export default function Navbar() {
                 {link.label}
               </a>
             ))}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                onClick={() => setIsOpen(false)}
-                className="block px-4 py-3 text-[var(--gold)] font-['Be_Vietnam_Pro'] text-sm transition-colors rounded-lg hover:bg-white/5"
-              >
-                {t(lang, "nav_admin")}
-              </Link>
-            )}
-            <div className="pt-3 border-t border-white/10">
-              {isAuthenticated ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-white/30 text-white hover:bg-white/10"
-                  onClick={() => logout.mutate()}
-                >
-                  {t(lang, "nav_logout")}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  className="w-full bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-semibold"
-                  onClick={() => (window.location.href = getLoginUrl())}
-                >
-                  {t(lang, "nav_login")}
-                </Button>
-              )}
-            </div>
+            <Link
+              href="/admin"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-2 px-4 py-3 text-white/50 hover:text-[var(--gold)] font-['Be_Vietnam_Pro'] text-sm transition-colors rounded-lg hover:bg-white/5"
+            >
+              <Shield className="w-4 h-4" />
+              {t(lang, "nav_admin")}
+            </Link>
           </div>
         </div>
       )}

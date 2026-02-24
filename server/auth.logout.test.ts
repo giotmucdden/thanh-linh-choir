@@ -1,62 +1,56 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
-import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
 
-type CookieCall = {
-  name: string;
-  options: Record<string, unknown>;
-};
-
-type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
-
-function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] } {
-  const clearedCookies: CookieCall[] = [];
-
-  const user: AuthenticatedUser = {
-    id: 1,
-    openId: "sample-user",
-    email: "sample@example.com",
-    name: "Sample User",
-    loginMethod: "manus",
-    role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
-
+function createCtx(cookieHeader = ""): { ctx: TrpcContext; headers: string[] } {
+  const headers: string[] = [];
   const ctx: TrpcContext = {
-    user,
+    user: null,
     req: {
       protocol: "https",
-      headers: {},
+      headers: { cookie: cookieHeader },
     } as TrpcContext["req"],
     res: {
-      clearCookie: (name: string, options: Record<string, unknown>) => {
-        clearedCookies.push({ name, options });
-      },
-    } as TrpcContext["res"],
+      setHeader: (_name: string, value: string) => { headers.push(value); },
+      clearCookie: () => {},
+    } as unknown as TrpcContext["res"],
   };
-
-  return { ctx, clearedCookies };
+  return { ctx, headers };
 }
 
-describe("auth.logout", () => {
-  it("clears the session cookie and reports success", async () => {
-    const { ctx, clearedCookies } = createAuthContext();
+describe("admin.login", () => {
+  it("rejects wrong password", async () => {
+    const { ctx } = createCtx();
     const caller = appRouter.createCaller(ctx);
+    await expect(caller.admin.login({ password: "wrong" })).rejects.toThrow();
+  });
 
-    const result = await caller.auth.logout();
-
+  it("accepts correct password and sets cookie", async () => {
+    const { ctx, headers } = createCtx();
+    const caller = appRouter.createCaller(ctx);
+    // Use the default password from routers.ts
+    const result = await caller.admin.login({ password: "ThanhLinh2024!" });
     expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({
-      maxAge: -1,
-      secure: true,
-      sameSite: "none",
-      httpOnly: true,
-      path: "/",
-    });
+    expect(headers.length).toBeGreaterThan(0);
+    expect(headers[0]).toContain("choir_admin_session");
+  });
+});
+
+describe("admin.logout", () => {
+  it("clears the admin session cookie", async () => {
+    const { ctx, headers } = createCtx();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.logout();
+    expect(result).toEqual({ success: true });
+    expect(headers[0]).toContain("Max-Age=0");
+  });
+});
+
+describe("admin.check", () => {
+  it("returns isAdmin=false when no cookie is present", async () => {
+    const { ctx } = createCtx();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.check();
+    expect(result.isAdmin).toBe(false);
   });
 });

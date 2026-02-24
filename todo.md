@@ -63,3 +63,19 @@
 - [x] Update calendar cells: show event start time (not block start time)
 - [x] Update admin panel: show both event time and reserved block
 - [x] Update vitest tests for new logic
+
+## Remove Auth for Public Viewing
+- [ ] Remove any login redirect / auth guard from Home page
+- [ ] Remove auth requirement from Navbar (show login only as optional)
+- [ ] Ensure BookingCalendar and BookingForm work without login
+- [ ] Ensure DMLV events section visible without login
+- [ ] Keep admin panel protected (auth required)
+
+## Remove Manus OAuth - Full Public Access
+- [x] Add adminLogin / adminLogout procedures using env-based password
+- [x] Add admin session via JWT cookie (no Manus OAuth)
+- [x] Update Navbar: remove OAuth login button entirely
+- [x] Update Admin page: show password login form instead of OAuth
+- [x] Remove useAuth / getLoginUrl from all public pages
+- [x] Keep all public tRPC procedures as publicProcedure
+- [x] Update adminProcedure to use new JWT-based admin session

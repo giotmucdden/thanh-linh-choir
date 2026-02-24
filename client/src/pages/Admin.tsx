@@ -21,7 +21,6 @@ import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
 
 // ── Sub-components ──────────────────────────────────────────────────────────
@@ -201,13 +200,83 @@ function BookingDetailsForm({ bookingId, onClose }: { bookingId: number; onClose
   );
 }
 
-// ── Main Admin Page ─────────────────────────────────────────────────────────
+// ── Admin Login Screen ──────────────────────────────────────────────────────
+
+function AdminLoginScreen({ lang }: { lang: "vi" | "en" }) {
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const utils = trpc.useUtils();
+  const login = trpc.admin.login.useMutation({
+    onSuccess: () => {
+      utils.admin.check.invalidate();
+      toast.success(lang === "vi" ? "Đăng nhập thành công" : "Logged in successfully");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-full max-w-sm mx-auto px-4">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-full bg-[var(--gold)/10] border-2 border-[var(--gold)/30] flex items-center justify-center mx-auto mb-4">
+            <Shield className="w-8 h-8 text-[var(--gold)]" />
+          </div>
+          <h2 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-1">
+            {lang === "vi" ? "Quản Trị" : "Admin Panel"}
+          </h2>
+          <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">
+            {lang === "vi" ? "Nhập mật khẩu quản trị viên" : "Enter the admin password to continue"}
+          </p>
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); login.mutate({ password }); }} className="space-y-4">
+          <div>
+            <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">
+              {lang === "vi" ? "Mật khẩu" : "Password"}
+            </Label>
+            <div className="relative mt-1">
+              <Input
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="font-['Be_Vietnam_Pro'] pr-10"
+                placeholder="••••••••"
+                required
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(!showPw)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors text-xs font-['Be_Vietnam_Pro']"
+              >
+                {showPw ? (lang === "vi" ? "Ẩn" : "Hide") : (lang === "vi" ? "Hiện" : "Show")}
+              </button>
+            </div>
+          </div>
+          <Button
+            type="submit"
+            disabled={login.isPending || !password}
+            className="w-full bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold"
+          >
+            {login.isPending
+              ? (lang === "vi" ? "Đang xử lý..." : "Signing in...")
+              : (lang === "vi" ? "Đăng nhập" : "Sign In")}
+          </Button>
+        </form>
+        <Link href="/" className="block mt-4 text-center font-['Be_Vietnam_Pro'] text-sm text-muted-foreground hover:text-[var(--gold)] transition-colors">
+          ← {lang === "vi" ? "Về trang chủ" : "Back to site"}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Admin Page ───────────────────────────────────────────────────────────
 
 type AdminTab = "bookings" | "members" | "events" | "reminders";
 
 export default function Admin() {
   const { lang } = useLang();
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>("bookings");
   const [detailsBookingId, setDetailsBookingId] = useState<number | null>(null);
   const [rejectBookingId, setRejectBookingId] = useState<number | null>(null);
@@ -220,9 +289,9 @@ export default function Admin() {
   const utils = trpc.useUtils();
 
   // Queries
-  const { data: bookings = [], isLoading: bookingsLoading } = trpc.bookings.getAll.useQuery(undefined, { enabled: isAuthenticated && user?.role === "admin" });
-  const { data: members = [], isLoading: membersLoading } = trpc.choirMembers.getAll.useQuery(undefined, { enabled: isAuthenticated && user?.role === "admin" });
-  const { data: dmlvEvents = [], isLoading: eventsLoading } = trpc.dmlvEvents.getAll.useQuery(undefined, { enabled: isAuthenticated && user?.role === "admin" });
+  const { data: bookings = [], isLoading: bookingsLoading } = trpc.bookings.getAll.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: members = [], isLoading: membersLoading } = trpc.choirMembers.getAll.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: dmlvEvents = [], isLoading: eventsLoading } = trpc.dmlvEvents.getAll.useQuery(undefined, { enabled: isAuthenticated });
 
   // Mutations
   const updateStatus = trpc.bookings.updateStatus.useMutation({
@@ -263,30 +332,7 @@ export default function Admin() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-sm mx-auto px-4">
-          <div className="w-16 h-16 rounded-full bg-[var(--gold)/10] border-2 border-[var(--gold)/30] flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-8 h-8 text-[var(--gold)]" />
-          </div>
-          <h2 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-2">
-            {t(lang, "admin_title")}
-          </h2>
-          <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm mb-6">
-            {lang === "vi" ? "Vui lòng đăng nhập để truy cập trang quản trị." : "Please log in to access the admin panel."}
-          </p>
-          <Button
-            className="bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold w-full"
-            onClick={() => (window.location.href = getLoginUrl())}
-          >
-            {t(lang, "nav_login")}
-          </Button>
-          <Link href="/" className="block mt-3 font-['Be_Vietnam_Pro'] text-sm text-muted-foreground hover:text-[var(--gold)] transition-colors">
-            ← {t(lang, "back")}
-          </Link>
-        </div>
-      </div>
-    );
+    return <AdminLoginScreen lang={lang} />;
   }
 
   if (user?.role !== "admin") {
@@ -360,20 +406,28 @@ export default function Admin() {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
-              <span className="text-xs font-semibold text-sidebar-foreground">{user.name?.charAt(0) ?? "A"}</span>
+        <div className="p-4 border-t border-sidebar-border space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-sidebar-primary flex items-center justify-center">
+              <Shield className="w-4 h-4 text-sidebar-primary-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-['Be_Vietnam_Pro'] text-xs font-medium text-sidebar-foreground truncate">{user.name}</p>
-              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-sidebar-foreground/50 truncate">{user.email}</p>
+              <p className="font-['Be_Vietnam_Pro'] text-xs font-medium text-sidebar-foreground">{lang === "vi" ? "Quản trị viên" : "Administrator"}</p>
+              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-sidebar-foreground/50">{lang === "vi" ? "Đã đăng nhập" : "Signed in"}</p>
             </div>
           </div>
-          <Link href="/" className="flex items-center gap-2 text-sidebar-foreground/60 hover:text-sidebar-foreground font-['Be_Vietnam_Pro'] text-xs transition-colors">
-            <LogOut className="w-3.5 h-3.5" />
-            {lang === "vi" ? "Về trang chủ" : "Back to site"}
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/" className="flex-1 flex items-center justify-center gap-1 py-1.5 text-sidebar-foreground/60 hover:text-sidebar-foreground font-['Be_Vietnam_Pro'] text-xs transition-colors rounded-md hover:bg-sidebar-accent">
+              ← {lang === "vi" ? "Trang chủ" : "Home"}
+            </Link>
+            <button
+              onClick={() => logout().then(() => window.location.reload())}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 text-red-400 hover:text-red-300 font-['Be_Vietnam_Pro'] text-xs transition-colors rounded-md hover:bg-red-500/10"
+            >
+              <LogOut className="w-3 h-3" />
+              {lang === "vi" ? "Đăng xuất" : "Logout"}
+            </button>
+          </div>
         </div>
       </aside>
 
