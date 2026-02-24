@@ -1,20 +1,14 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Menu, X, Music } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
-import { trpc } from "@/lib/trpc";
 
 export default function Navbar() {
   const { lang, toggle } = useLang();
-  const { user, isAuthenticated } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [location] = useLocation();
-  const logout = trpc.auth.logout.useMutation({ onSuccess: () => window.location.reload() });
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -29,8 +23,6 @@ export default function Navbar() {
     { href: "/#booking", label: t(lang, "nav_booking") },
     { href: "/#events", label: t(lang, "nav_events") },
   ];
-
-  const isAdmin = user?.role === "admin";
 
   return (
     <nav
@@ -72,14 +64,12 @@ export default function Navbar() {
                 {link.label}
               </a>
             ))}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className="px-4 py-2 text-sm font-['Be_Vietnam_Pro'] font-medium tracking-wide text-[var(--gold)] hover:text-white transition-colors rounded-md"
-              >
-                {t(lang, "nav_admin")}
-              </Link>
-            )}
+            <Link
+              href="/admin"
+              className="px-4 py-2 text-sm font-['Be_Vietnam_Pro'] font-medium tracking-wide text-[var(--gold)] hover:text-white transition-colors rounded-md"
+            >
+              {t(lang, "nav_admin")}
+            </Link>
           </div>
 
           {/* Right Actions */}
@@ -93,25 +83,6 @@ export default function Navbar() {
               <span className="text-white/30">|</span>
               <span className={lang === "en" ? "text-[var(--gold)]" : "text-white/50"}>EN</span>
             </button>
-
-            {isAuthenticated ? (
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-white/30 text-white hover:bg-white/10 hover:text-white font-['Be_Vietnam_Pro'] text-xs"
-                onClick={() => logout.mutate()}
-              >
-                {t(lang, "nav_logout")}
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold text-xs tracking-wide"
-                onClick={() => (window.location.href = getLoginUrl())}
-              >
-                {t(lang, "nav_login")}
-              </Button>
-            )}
           </div>
 
           {/* Mobile menu button */}
@@ -146,35 +117,13 @@ export default function Navbar() {
                 {link.label}
               </a>
             ))}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                onClick={() => setIsOpen(false)}
-                className="block px-4 py-3 text-[var(--gold)] font-['Be_Vietnam_Pro'] text-sm transition-colors rounded-lg hover:bg-white/5"
-              >
-                {t(lang, "nav_admin")}
-              </Link>
-            )}
-            <div className="pt-3 border-t border-white/10">
-              {isAuthenticated ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-white/30 text-white hover:bg-white/10"
-                  onClick={() => logout.mutate()}
-                >
-                  {t(lang, "nav_logout")}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  className="w-full bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-semibold"
-                  onClick={() => (window.location.href = getLoginUrl())}
-                >
-                  {t(lang, "nav_login")}
-                </Button>
-              )}
-            </div>
+            <Link
+              href="/admin"
+              onClick={() => setIsOpen(false)}
+              className="block px-4 py-3 text-[var(--gold)] font-['Be_Vietnam_Pro'] text-sm transition-colors rounded-lg hover:bg-white/5"
+            >
+              {t(lang, "nav_admin")}
+            </Link>
           </div>
         </div>
       )}

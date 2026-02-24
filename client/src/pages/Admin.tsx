@@ -20,8 +20,6 @@ import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
 
 // ── Sub-components ──────────────────────────────────────────────────────────
@@ -207,7 +205,9 @@ type AdminTab = "bookings" | "members" | "events" | "reminders";
 
 export default function Admin() {
   const { lang } = useLang();
-  const { user, isAuthenticated, loading } = useAuth();
+  // Auth removed - always admin access
+  const user = { role: "admin", name: "Admin" };
+  const loading = false;
   const [activeTab, setActiveTab] = useState<AdminTab>("bookings");
   const [detailsBookingId, setDetailsBookingId] = useState<number | null>(null);
   const [rejectBookingId, setRejectBookingId] = useState<number | null>(null);
@@ -220,9 +220,9 @@ export default function Admin() {
   const utils = trpc.useUtils();
 
   // Queries
-  const { data: bookings = [], isLoading: bookingsLoading } = trpc.bookings.getAll.useQuery(undefined, { enabled: isAuthenticated && user?.role === "admin" });
-  const { data: members = [], isLoading: membersLoading } = trpc.choirMembers.getAll.useQuery(undefined, { enabled: isAuthenticated && user?.role === "admin" });
-  const { data: dmlvEvents = [], isLoading: eventsLoading } = trpc.dmlvEvents.getAll.useQuery(undefined, { enabled: isAuthenticated && user?.role === "admin" });
+  const { data: bookings = [], isLoading: bookingsLoading } = trpc.bookings.getAll.useQuery();
+  const { data: members = [], isLoading: membersLoading } = trpc.choirMembers.getAll.useQuery();
+  const { data: dmlvEvents = [], isLoading: eventsLoading } = trpc.dmlvEvents.getAll.useQuery();
 
   // Mutations
   const updateStatus = trpc.bookings.updateStatus.useMutation({
@@ -257,50 +257,6 @@ export default function Admin() {
         <div className="text-center">
           <div className="w-10 h-10 border-2 border-[var(--gold)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">{t(lang, "loading")}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-sm mx-auto px-4">
-          <div className="w-16 h-16 rounded-full bg-[var(--gold)/10] border-2 border-[var(--gold)/30] flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-8 h-8 text-[var(--gold)]" />
-          </div>
-          <h2 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-2">
-            {t(lang, "admin_title")}
-          </h2>
-          <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm mb-6">
-            {lang === "vi" ? "Vui lòng đăng nhập để truy cập trang quản trị." : "Please log in to access the admin panel."}
-          </p>
-          <Button
-            className="bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold w-full"
-            onClick={() => (window.location.href = getLoginUrl())}
-          >
-            {t(lang, "nav_login")}
-          </Button>
-          <Link href="/" className="block mt-3 font-['Be_Vietnam_Pro'] text-sm text-muted-foreground hover:text-[var(--gold)] transition-colors">
-            ← {t(lang, "back")}
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (user?.role !== "admin") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
-          <h2 className="font-['Cormorant_Garamond'] text-2xl text-foreground mb-2">
-            {lang === "vi" ? "Không có quyền truy cập" : "Access Denied"}
-          </h2>
-          <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm mb-4">
-            {lang === "vi" ? "Bạn không có quyền admin." : "You do not have admin privileges."}
-          </p>
-          <Link href="/" className="font-['Be_Vietnam_Pro'] text-sm text-[var(--gold)] hover:underline">← {t(lang, "back")}</Link>
         </div>
       </div>
     );

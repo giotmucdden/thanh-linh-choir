@@ -1,9 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, router } from "./_core/trpc";
 import { notifyOwner } from "./_core/notification";
 import {
   createBooking,
@@ -30,21 +28,14 @@ import {
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
 
-// Admin guard middleware
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
-  return next({ ctx });
-});
+// All procedures are now public (auth removed)
+const adminProcedure = publicProcedure;
 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
+    me: publicProcedure.query(() => ({ role: "admin", name: "Admin", openId: "admin" })),
+    logout: publicProcedure.mutation(() => ({ success: true } as const)),
   }),
 
   // ── Bookings ─────────────────────────────────────────────────────────────
