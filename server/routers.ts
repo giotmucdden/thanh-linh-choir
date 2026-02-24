@@ -68,54 +68,71 @@ export const appRouter = router({
           eventName: z.string().min(1),
           eventType: z.enum(["wedding", "funeral", "mass", "concert", "other"]),
           eventDate: z.number(),
-          startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
-          endTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
+          // The actual event/mass start time chosen by the user (e.g. "11:00")
+          eventStartTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
           location: z.string().optional(),
           notes: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
-        // Helper: convert "HH:MM" to total minutes
-        const toMins = (t: string) => {
-          const [h, m] = t.split(":").map(Number);
-          return h * 60 + m;
+        // Helper: convert "HH:MM" <-> total minutes
+        const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+        const fromMins = (mins: number) => {
+          const clamped = Math.max(0, Math.min(mins, 1439));
+          return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
         };
-        const startMins = toMins(input.startTime);
-        const endMins = toMins(input.endTime);
 
-        // Enforce minimum 3-hour duration
-        if (endMins - startMins < 180) {
+        const eventMins = toMins(input.eventStartTime);
+
+        // Block = 1 hour before event + event + 1 hour after (total 3 hours reserved)
+        // The event is expected to last ~1 hour; the remaining 1h after is buffer.
+        const BEFORE_BUFFER = 60; // minutes before event (choir practice / travel)
+        const AFTER_BUFFER  = 60; // minutes after event  (potential overrun / travel to next location)
+        const blockStartMins = eventMins - BEFORE_BUFFER;
+        const blockEndMins   = eventMins + AFTER_BUFFER + 60; // +60 for ~1h event duration
+
+        if (blockStartMins < 0) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Thời gian tối thiểu là 3 giờ / Minimum duration is 3 hours",
+            message: "Giờ sự kiện quá sớm. Vui lòng chọn từ 07:00 trở đi. / Event time too early. Please choose 07:00 or later.",
           });
         }
-        if (endMins <= startMins) {
+        if (blockEndMins >= 1440) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Giờ kết thúc phải sau giờ bắt đầu / End time must be after start time",
+            message: "Giờ sự kiện quá muộn. Vui lòng chọn trước 21:00. / Event time too late. Please choose before 21:00.",
           });
         }
 
-        // Check for time-slot overlaps on the same day
+        const blockStart = fromMins(blockStartMins);
+        const blockEnd   = fromMins(blockEndMins);
+
+        // Check for block overlaps on the same day
         const existingOnDay = await getBookingsOnDay(input.eventDate);
         for (const existing of existingOnDay) {
           if (!existing.endTime) continue;
           const exStart = toMins(existing.startTime);
-          const exEnd = toMins(existing.endTime);
-          // Overlap: new slot starts before existing ends AND new slot ends after existing starts
-          if (startMins < exEnd && endMins > exStart) {
+          const exEnd   = toMins(existing.endTime);
+          if (blockStartMins < exEnd && blockEndMins > exStart) {
+            const existingEvent = existing.eventStartTime
+              ? `sự kiện lúc ${existing.eventStartTime}`
+              : `"${existing.eventName}"`;
             throw new TRPCError({
               code: "CONFLICT",
-              message: `Khung giờ ${input.startTime}–${input.endTime} bị trùng với sự kiện "${existing.eventName}" (${existing.startTime}–${existing.endTime}). Vui lòng chọn khung giờ khác. / Time slot ${input.startTime}–${input.endTime} overlaps with "${existing.eventName}" (${existing.startTime}–${existing.endTime}).`,
+              message: `Khung giờ dự phòng ${blockStart}–${blockEnd} bị trùng với ${existingEvent} (khối ${existing.startTime}–${existing.endTime}). Vui lòng chọn giờ khác. / Reserved block ${blockStart}–${blockEnd} overlaps with ${existingEvent} (block ${existing.startTime}–${existing.endTime}).`,
             });
           }
         }
 
-        const id = await createBooking(input);
+        const id = await createBooking({
+          ...input,
+          eventStartTime: input.eventStartTime,
+          startTime: blockStart,
+          endTime: blockEnd,
+        });
         await notifyOwner({
           title: "Yêu cầu đặt lịch mới / New Booking Request",
-          content: `${input.requesterName} đã yêu cầu đặt lịch cho sự kiện "${input.eventName}" vào ngày ${new Date(input.eventDate).toLocaleDateString("vi-VN")} lúc ${input.startTime}–${input.endTime}.`,
+          content: `${input.requesterName} đã yêu cầu đặt lịch cho sự kiện "${input.eventName}" vào ngày ${new Date(input.eventDate).toLocaleDateString("vi-VN")} lúc ${input.eventStartTime} (khối dự phòng: ${blockStart}–${blockEnd}).`,
         });
         return { id };
       }),
@@ -128,8 +145,9 @@ export const appRouter = router({
         return bookingsOnDay.map((b) => ({
           id: b.id,
           eventName: b.eventName,
-          startTime: b.startTime,
-          endTime: b.endTime ?? "",
+          eventStartTime: b.eventStartTime ?? b.startTime,
+          startTime: b.startTime,   // block start
+          endTime: b.endTime ?? "", // block end
           status: b.status,
         }));
       }),

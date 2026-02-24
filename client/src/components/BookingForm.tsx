@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { CheckCircle, Clock, AlertCircle, Info } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, Info, Music } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,16 +22,19 @@ function toMins(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }
-
 // Convert minutes to "HH:MM"
 function fromMins(mins: number): string {
-  const h = Math.floor(mins / 60).toString().padStart(2, "0");
-  const m = (mins % 60).toString().padStart(2, "0");
-  return `${h}:${m}`;
+  const c = Math.max(0, Math.min(mins, 1439));
+  return `${String(Math.floor(c / 60)).padStart(2, "0")}:${String(c % 60).padStart(2, "0")}`;
 }
 
-// Generate time options every 30 minutes from 06:00 to 22:00
-const TIME_OPTIONS = Array.from({ length: 33 }, (_, i) => fromMins(360 + i * 30)); // 06:00 → 22:00
+// Block constants: 1h before + ~1h event + 1h after = 3h total
+const BEFORE_BUFFER = 60;
+const EVENT_DURATION = 60;
+const AFTER_BUFFER = 60;
+
+// Event time options: 07:00 – 20:00 (so block fits within 06:00–22:00)
+const EVENT_TIME_OPTIONS = Array.from({ length: 27 }, (_, i) => fromMins(420 + i * 30)); // 07:00 → 20:00
 
 export default function BookingForm({ selectedDate, onSuccess }: BookingFormProps) {
   const { lang } = useLang();
@@ -42,11 +45,14 @@ export default function BookingForm({ selectedDate, onSuccess }: BookingFormProp
     requesterPhone: "",
     eventName: "",
     eventType: "mass" as "wedding" | "funeral" | "mass" | "concert" | "other",
-    startTime: "09:00",
-    endTime: "12:00",
+    eventStartTime: "10:00",
     location: "",
     notes: "",
   });
+
+  // Computed block times
+  const blockStart = useMemo(() => fromMins(toMins(form.eventStartTime) - BEFORE_BUFFER), [form.eventStartTime]);
+  const blockEnd = useMemo(() => fromMins(toMins(form.eventStartTime) + EVENT_DURATION + AFTER_BUFFER), [form.eventStartTime]);
 
   // Fetch existing time slots for the selected day
   const dayMs = useMemo(() => {
@@ -70,55 +76,34 @@ export default function BookingForm({ selectedDate, onSuccess }: BookingFormProp
     onError: (err) => toast.error(err.message),
   });
 
-  // Client-side validation
-  const validationError = useMemo(() => {
-    const startMins = toMins(form.startTime);
-    const endMins = toMins(form.endTime);
-    if (endMins <= startMins) {
-      return lang === "vi"
-        ? "Giờ kết thúc phải sau giờ bắt đầu."
-        : "End time must be after start time.";
-    }
-    if (endMins - startMins < 180) {
-      return lang === "vi"
-        ? `Thời gian tối thiểu là 3 giờ. Hiện tại: ${endMins - startMins} phút.`
-        : `Minimum duration is 3 hours. Current: ${endMins - startMins} min.`;
-    }
+  // Client-side overlap check
+  const overlapError = useMemo(() => {
+    const bStart = toMins(blockStart);
+    const bEnd = toMins(blockEnd);
     for (const slot of takenSlots) {
       if (!slot.endTime) continue;
       const exStart = toMins(slot.startTime);
       const exEnd = toMins(slot.endTime);
-      if (startMins < exEnd && endMins > exStart) {
+      if (bStart < exEnd && bEnd > exStart) {
         return lang === "vi"
-          ? `Khung giờ trùng với sự kiện "${slot.eventName}" (${slot.startTime}–${slot.endTime}).`
-          : `Overlaps with "${slot.eventName}" (${slot.startTime}–${slot.endTime}).`;
+          ? `Khung giờ dự phòng ${blockStart}–${blockEnd} bị trùng với sự kiện "${slot.eventName}" (${slot.startTime}–${slot.endTime}).`
+          : `Reserved block ${blockStart}–${blockEnd} overlaps with "${slot.eventName}" (${slot.startTime}–${slot.endTime}).`;
       }
     }
     return null;
-  }, [form.startTime, form.endTime, takenSlots, lang]);
-
-  // Auto-set endTime to at least startTime + 3 hours when startTime changes
-  const handleStartTimeChange = (value: string) => {
-    const startMins = toMins(value);
-    const currentEndMins = toMins(form.endTime);
-    const minEndMins = startMins + 180;
-    setForm({
-      ...form,
-      startTime: value,
-      endTime: currentEndMins < minEndMins ? fromMins(Math.min(minEndMins, 1320)) : form.endTime,
-    });
-  };
+  }, [blockStart, blockEnd, takenSlots, lang]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (validationError) {
-      toast.error(validationError);
-      return;
-    }
+    if (overlapError) { toast.error(overlapError); return; }
     createBooking.mutate({
-      ...form,
-      eventDate: selectedDate.getTime(),
+      requesterName: form.requesterName,
+      requesterEmail: form.requesterEmail,
       requesterPhone: form.requesterPhone || undefined,
+      eventName: form.eventName,
+      eventType: form.eventType,
+      eventDate: selectedDate.getTime(),
+      eventStartTime: form.eventStartTime,
       location: form.location || undefined,
       notes: form.notes || undefined,
     });
@@ -131,11 +116,6 @@ export default function BookingForm({ selectedDate, onSuccess }: BookingFormProp
     { value: "concert", label: t(lang, "event_concert") },
     { value: "other", label: t(lang, "event_other") },
   ];
-
-  const durationMins = toMins(form.endTime) - toMins(form.startTime);
-  const durationDisplay = durationMins > 0
-    ? `${Math.floor(durationMins / 60)}h${durationMins % 60 > 0 ? ` ${durationMins % 60}m` : ""}`
-    : "—";
 
   if (submitted) {
     return (
@@ -159,7 +139,7 @@ export default function BookingForm({ selectedDate, onSuccess }: BookingFormProp
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Selected date display */}
+      {/* Selected date */}
       <div className="bg-[var(--gold)/10] border border-[var(--gold)/30] rounded-lg px-4 py-3">
         <p className="font-['Be_Vietnam_Pro'] text-sm text-[var(--gold-dark)] font-medium">
           {t(lang, "booking_date")}: {format(selectedDate, "EEEE, dd/MM/yyyy")}
@@ -182,111 +162,115 @@ export default function BookingForm({ selectedDate, onSuccess }: BookingFormProp
                 variant="secondary"
                 className="font-['Be_Vietnam_Pro'] text-xs bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30"
               >
-                <Clock className="w-3 h-3 mr-1" />
-                {slot.startTime}–{slot.endTime} · {slot.eventName}
+                <Music className="w-3 h-3 mr-1" />
+                {lang === "vi" ? "Lễ" : "Event"} {slot.eventStartTime} · {lang === "vi" ? "Khối" : "Block"} {slot.startTime}–{slot.endTime}
               </Badge>
             ))}
           </div>
         </div>
       )}
 
-      {/* Time slot picker */}
+      {/* Event time picker */}
       <div className="rounded-xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <Clock className="w-4 h-4 text-[var(--gold)]" />
           <span className="font-['Be_Vietnam_Pro'] text-sm font-semibold text-foreground">
-            {lang === "vi" ? "Chọn khung giờ (tối thiểu 3 giờ)" : "Select time slot (min. 3 hours)"}
+            {lang === "vi" ? "Chọn giờ bắt đầu sự kiện" : "Select event start time"}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="font-['Be_Vietnam_Pro'] text-xs font-medium text-muted-foreground mb-1 block">
-              {t(lang, "booking_start_time")} *
-            </Label>
-            <Select value={form.startTime} onValueChange={handleStartTimeChange}>
-              <SelectTrigger className="font-['Be_Vietnam_Pro'] text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="max-h-52">
-                {TIME_OPTIONS.filter((opt) => opt < "22:00").map((opt) => (
-                  <SelectItem key={opt} value={opt} className="font-['Be_Vietnam_Pro'] text-sm">
-                    {opt}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="font-['Be_Vietnam_Pro'] text-xs font-medium text-muted-foreground mb-1 block">
-              {t(lang, "booking_end_time")} *
-            </Label>
-            <Select
-              value={form.endTime}
-              onValueChange={(v) => setForm({ ...form, endTime: v })}
-            >
-              <SelectTrigger className="font-['Be_Vietnam_Pro'] text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="max-h-52">
-                {TIME_OPTIONS.filter((opt) => toMins(opt) >= toMins(form.startTime) + 180).map((opt) => (
-                  <SelectItem key={opt} value={opt} className="font-['Be_Vietnam_Pro'] text-sm">
-                    {opt}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Event time selector */}
+        <div>
+          <Label className="font-['Be_Vietnam_Pro'] text-xs font-medium text-muted-foreground mb-1 block">
+            {lang === "vi" ? "Giờ bắt đầu lễ / sự kiện *" : "Mass / Event start time *"}
+          </Label>
+          <Select value={form.eventStartTime} onValueChange={(v) => setForm({ ...form, eventStartTime: v })}>
+            <SelectTrigger className="font-['Be_Vietnam_Pro'] text-sm w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-52">
+              {EVENT_TIME_OPTIONS.map((opt) => (
+                <SelectItem key={opt} value={opt} className="font-['Be_Vietnam_Pro'] text-sm">
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Duration display */}
-        <div className={`flex items-center gap-2 text-xs font-['Be_Vietnam_Pro'] px-1 ${
-          validationError ? "text-red-500" : durationMins >= 180 ? "text-emerald-600" : "text-amber-600"
-        }`}>
-          {validationError ? (
-            <><AlertCircle className="w-3.5 h-3.5 shrink-0" /> {validationError}</>
+        {/* Auto-computed block display */}
+        <div className={`rounded-lg p-3 border ${overlapError ? "border-red-500/40 bg-red-500/5" : "border-emerald-500/30 bg-emerald-500/5"}`}>
+          <p className="font-['Be_Vietnam_Pro'] text-xs font-semibold mb-2 text-foreground">
+            {lang === "vi" ? "Khung giờ dự phòng tự động (3 giờ):" : "Auto-reserved 3-hour block:"}
+          </p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
+              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-blue-600 dark:text-blue-400 font-medium mb-0.5">
+                {lang === "vi" ? "Tập hát / Di chuyển" : "Practice / Travel"}
+              </p>
+              <p className="font-['Be_Vietnam_Pro'] text-sm font-bold text-foreground">{blockStart}</p>
+              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-muted-foreground">→ {form.eventStartTime}</p>
+            </div>
+            <div className="bg-[var(--gold)/15] border border-[var(--gold)/40] rounded-lg p-2">
+              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-[var(--gold-dark)] font-medium mb-0.5">
+                {lang === "vi" ? "Sự kiện / Lễ" : "Event / Mass"}
+              </p>
+              <p className="font-['Be_Vietnam_Pro'] text-sm font-bold text-[var(--gold-dark)]">{form.eventStartTime}</p>
+              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-muted-foreground">~1h</p>
+            </div>
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
+              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-purple-600 dark:text-purple-400 font-medium mb-0.5">
+                {lang === "vi" ? "Dự phòng / Di chuyển" : "Buffer / Travel"}
+              </p>
+              <p className="font-['Be_Vietnam_Pro'] text-sm font-bold text-foreground">{fromMins(toMins(form.eventStartTime) + EVENT_DURATION)}</p>
+              <p className="font-['Be_Vietnam_Pro'] text-[10px] text-muted-foreground">→ {blockEnd}</p>
+            </div>
+          </div>
+
+          {overlapError ? (
+            <div className="flex items-start gap-1.5 mt-2">
+              <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+              <p className="font-['Be_Vietnam_Pro'] text-xs text-red-600">{overlapError}</p>
+            </div>
           ) : (
-            <><Clock className="w-3.5 h-3.5 shrink-0" />
-              {lang === "vi" ? `Thời lượng: ${durationDisplay}` : `Duration: ${durationDisplay}`}
-              {durationMins >= 180 && " ✓"}
-            </>
+            <p className="font-['Be_Vietnam_Pro'] text-[10px] text-emerald-600 mt-2 flex items-center gap-1">
+              <span>✓</span>
+              {lang === "vi"
+                ? `Khung giờ ${blockStart}–${blockEnd} còn trống`
+                : `Block ${blockStart}–${blockEnd} is available`}
+            </p>
           )}
         </div>
 
-        {/* Visual timeline bar */}
-        <div className="relative h-8 bg-muted rounded-full overflow-hidden mt-1">
-          {/* Taken slots */}
+        {/* Visual timeline */}
+        <div className="relative h-8 bg-muted rounded-full overflow-hidden">
           {takenSlots.map((slot) => {
             if (!slot.endTime) return null;
-            const dayStart = 360; // 06:00
-            const dayEnd = 1320; // 22:00
-            const range = dayEnd - dayStart;
-            const left = ((toMins(slot.startTime) - dayStart) / range) * 100;
+            const DAY_START = 360; const DAY_END = 1320; const range = DAY_END - DAY_START;
+            const left = ((toMins(slot.startTime) - DAY_START) / range) * 100;
             const width = ((toMins(slot.endTime) - toMins(slot.startTime)) / range) * 100;
             return (
-              <div
-                key={slot.id}
-                className="absolute top-0 h-full bg-red-500/40 border-l border-r border-red-500/60"
-                style={{ left: `${left}%`, width: `${width}%` }}
-                title={`${slot.eventName} ${slot.startTime}–${slot.endTime}`}
-              />
+              <div key={slot.id} className="absolute top-0 h-full bg-red-500/40 border-l border-r border-red-500/60"
+                style={{ left: `${left}%`, width: `${width}%` }} title={`${slot.eventName}`} />
             );
           })}
-          {/* Selected slot */}
-          {durationMins > 0 && (() => {
-            const dayStart = 360;
-            const dayEnd = 1320;
-            const range = dayEnd - dayStart;
-            const left = ((toMins(form.startTime) - dayStart) / range) * 100;
-            const width = ((durationMins) / range) * 100;
+          {/* Selected block */}
+          {(() => {
+            const DAY_START = 360; const DAY_END = 1320; const range = DAY_END - DAY_START;
+            const bStartMins = toMins(blockStart); const bEndMins = toMins(blockEnd);
+            const left = ((bStartMins - DAY_START) / range) * 100;
+            const width = ((bEndMins - bStartMins) / range) * 100;
+            const eventLeft = ((toMins(form.eventStartTime) - DAY_START) / range) * 100;
+            const eventWidth = (EVENT_DURATION / range) * 100;
             return (
-              <div
-                className={`absolute top-0 h-full ${validationError ? "bg-red-600/50" : "bg-[var(--gold)/60]"} border-l border-r ${validationError ? "border-red-600" : "border-[var(--gold)]"} transition-all`}
-                style={{ left: `${Math.max(0, left)}%`, width: `${Math.min(width, 100 - Math.max(0, left))}%` }}
-              />
+              <>
+                <div className={`absolute top-0 h-full ${overlapError ? "bg-red-600/40" : "bg-[var(--gold)/40]"} border-l border-r ${overlapError ? "border-red-600" : "border-[var(--gold)]"} transition-all`}
+                  style={{ left: `${Math.max(0, left)}%`, width: `${Math.min(width, 100 - Math.max(0, left))}%` }} />
+                <div className="absolute top-0 h-full bg-[var(--gold)] opacity-70"
+                  style={{ left: `${Math.max(0, eventLeft)}%`, width: `${eventWidth}%` }} />
+              </>
             );
           })()}
-          {/* Time labels */}
           <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none">
             <span className="text-[9px] text-muted-foreground font-['Be_Vietnam_Pro']">06:00</span>
             <span className="text-[9px] text-muted-foreground font-['Be_Vietnam_Pro']">14:00</span>
@@ -294,7 +278,7 @@ export default function BookingForm({ selectedDate, onSuccess }: BookingFormProp
           </div>
         </div>
         <p className="text-[10px] text-muted-foreground font-['Be_Vietnam_Pro']">
-          {lang === "vi" ? "🔴 Đã đặt  🟡 Đang chọn" : "🔴 Taken  🟡 Your selection"}
+          {lang === "vi" ? "🔴 Đã đặt  🟡 Khối dự phòng  🟠 Giờ sự kiện" : "🔴 Taken  🟡 Reserved block  🟠 Event time"}
         </p>
       </div>
 
@@ -302,83 +286,60 @@ export default function BookingForm({ selectedDate, onSuccess }: BookingFormProp
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">{t(lang, "booking_name")} *</Label>
-          <Input
-            required
-            value={form.requesterName}
+          <Input required value={form.requesterName}
             onChange={(e) => setForm({ ...form, requesterName: e.target.value })}
             className="mt-1 font-['Be_Vietnam_Pro']"
-            placeholder={lang === "vi" ? "Nguyễn Văn A" : "John Doe"}
-          />
+            placeholder={lang === "vi" ? "Nguyễn Văn A" : "John Doe"} />
         </div>
         <div>
           <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">{t(lang, "booking_email")} *</Label>
-          <Input
-            required
-            type="email"
-            value={form.requesterEmail}
+          <Input required type="email" value={form.requesterEmail}
             onChange={(e) => setForm({ ...form, requesterEmail: e.target.value })}
-            className="mt-1 font-['Be_Vietnam_Pro']"
-            placeholder="email@example.com"
-          />
+            className="mt-1 font-['Be_Vietnam_Pro']" placeholder="email@example.com" />
         </div>
         <div>
           <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">{t(lang, "booking_phone")}</Label>
-          <Input
-            value={form.requesterPhone}
+          <Input value={form.requesterPhone}
             onChange={(e) => setForm({ ...form, requesterPhone: e.target.value })}
-            className="mt-1 font-['Be_Vietnam_Pro']"
-            placeholder="0912 345 678"
-          />
+            className="mt-1 font-['Be_Vietnam_Pro']" placeholder="0912 345 678" />
         </div>
         <div className="col-span-2">
           <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">{t(lang, "booking_event_name")} *</Label>
-          <Input
-            required
-            value={form.eventName}
+          <Input required value={form.eventName}
             onChange={(e) => setForm({ ...form, eventName: e.target.value })}
             className="mt-1 font-['Be_Vietnam_Pro']"
-            placeholder={lang === "vi" ? "Lễ cưới Nguyễn - Trần" : "Nguyen - Tran Wedding"}
-          />
+            placeholder={lang === "vi" ? "Lễ cưới Nguyễn - Trần" : "Nguyen - Tran Wedding"} />
         </div>
         <div>
           <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">{t(lang, "booking_event_type")}</Label>
           <Select value={form.eventType} onValueChange={(v) => setForm({ ...form, eventType: v as typeof form.eventType })}>
-            <SelectTrigger className="mt-1 font-['Be_Vietnam_Pro']">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="mt-1 font-['Be_Vietnam_Pro']"><SelectValue /></SelectTrigger>
             <SelectContent>
               {eventTypes.map((et) => (
-                <SelectItem key={et.value} value={et.value} className="font-['Be_Vietnam_Pro']">
-                  {et.label}
-                </SelectItem>
+                <SelectItem key={et.value} value={et.value} className="font-['Be_Vietnam_Pro']">{et.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div>
           <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">{t(lang, "booking_location")}</Label>
-          <Input
-            value={form.location}
+          <Input value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })}
             className="mt-1 font-['Be_Vietnam_Pro']"
-            placeholder={lang === "vi" ? "Nhà thờ..." : "Church..."}
-          />
+            placeholder={lang === "vi" ? "Nhà thờ..." : "Church..."} />
         </div>
         <div className="col-span-2">
           <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">{t(lang, "booking_notes")}</Label>
-          <Textarea
-            value={form.notes}
+          <Textarea value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            className="mt-1 font-['Be_Vietnam_Pro'] resize-none"
-            rows={3}
-            placeholder={lang === "vi" ? "Yêu cầu đặc biệt..." : "Special requests..."}
-          />
+            className="mt-1 font-['Be_Vietnam_Pro'] resize-none" rows={3}
+            placeholder={lang === "vi" ? "Yêu cầu đặc biệt..." : "Special requests..."} />
         </div>
       </div>
 
       <Button
         type="submit"
-        disabled={createBooking.isPending || !!validationError}
+        disabled={createBooking.isPending || !!overlapError}
         className="w-full bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold tracking-wide disabled:opacity-50"
       >
         {createBooking.isPending ? t(lang, "loading") : t(lang, "booking_submit")}

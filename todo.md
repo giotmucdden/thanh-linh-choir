@@ -54,3 +54,12 @@
 - [x] Update BookingCalendar: show multiple booked slots per day cell
 - [x] Update BookingForm: time slot picker (start time + end time, min 3 hours, validates overlap)
 - [x] Update Admin panel booking list to show time slots
+
+## Event-Centered 3-Hour Block Update
+- [x] Add eventStartTime column to bookings schema (the actual mass/event time)
+- [x] Push DB migration
+- [x] Update booking router: auto-compute block startTime = eventStartTime - 1h, endTime = eventStartTime + 2h
+- [x] Update BookingForm: user picks event start time, shows computed block visually
+- [x] Update calendar cells: show event start time (not block start time)
+- [x] Update admin panel: show both event time and reserved block
+- [x] Update vitest tests for new logic

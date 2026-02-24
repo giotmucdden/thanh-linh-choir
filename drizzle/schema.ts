@@ -48,8 +48,9 @@ export const bookings = mysqlTable("bookings", {
   eventName: varchar("eventName", { length: 255 }).notNull(),
   eventType: mysqlEnum("eventType", ["wedding", "funeral", "mass", "concert", "other"]).default("mass").notNull(),
   eventDate: bigint("eventDate", { mode: "number" }).notNull(), // UTC ms timestamp
-  startTime: varchar("startTime", { length: 10 }).notNull(), // "HH:MM"
-  endTime: varchar("endTime", { length: 10 }),
+  eventStartTime: varchar("eventStartTime", { length: 10 }), // "HH:MM" — the actual mass/event start time (center of block)
+  startTime: varchar("startTime", { length: 10 }).notNull(), // "HH:MM" — block start = eventStartTime - 1h
+  endTime: varchar("endTime", { length: 10 }), // "HH:MM" — block end = eventStartTime + 2h
   location: varchar("location", { length: 255 }),
   notes: text("notes"),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),

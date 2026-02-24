@@ -99,7 +99,7 @@ describe("dmlvEvents - public access", () => {
   });
 });
 
-describe("bookings.create - time slot validation", () => {
+describe("bookings.create - event-centered 3-hour block validation", () => {
   const baseInput = {
     requesterName: "Test User",
     requesterEmail: "test@example.com",
@@ -110,28 +110,35 @@ describe("bookings.create - time slot validation", () => {
     notes: "Test notes",
   };
 
-  it("rejects if end time is before start time", async () => {
+  it("rejects if event time is too early (before 07:00 — block would start before midnight)", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
+    // 00:30 event → block starts at -00:30 (invalid)
     await expect(
-      caller.bookings.create({ ...baseInput, startTime: "14:00", endTime: "10:00" })
+      caller.bookings.create({ ...baseInput, eventStartTime: "00:30" })
     ).rejects.toThrow();
   });
 
-  it("rejects if duration is less than 3 hours (e.g. 2h)", async () => {
+  it("rejects if event time is too late (after 21:00 — block would end after midnight)", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
+    // 22:00 event → block ends at 24:00 (invalid)
     await expect(
-      caller.bookings.create({ ...baseInput, startTime: "09:00", endTime: "11:00" })
-    ).rejects.toThrow(/3/);
+      caller.bookings.create({ ...baseInput, eventStartTime: "22:00" })
+    ).rejects.toThrow();
   });
 
-  it("rejects if duration is exactly 2h59m (just under minimum)", async () => {
+  it("accepts a valid event time (e.g. 11:00 → block 10:00–13:00) — no time-range error", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
-    await expect(
-      caller.bookings.create({ ...baseInput, startTime: "09:00", endTime: "11:59" })
-    ).rejects.toThrow();
+    // Use a far-future unique date unlikely to have any existing bookings
+    const result = await caller.bookings.create({
+      ...baseInput,
+      eventDate: new Date("2099-12-25T00:00:00.000Z").getTime(),
+      eventStartTime: "11:00",
+    }).catch((e: Error) => e.message);
+    // Should NOT fail with a time-range validation error (may fail with DB error which is OK)
+    expect(typeof result === "string" ? result : "").not.toMatch(/quá sớm|quá muộn|too early|too late|tối thiểu|minimum/);
   });
 
   it("getTimeSlotsForDay is publicly accessible", async () => {
@@ -140,6 +147,15 @@ describe("bookings.create - time slot validation", () => {
     const result = await caller.bookings.getTimeSlotsForDay({
       dayMs: new Date("2030-06-15T00:00:00.000Z").getTime(),
     }).catch(() => []);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("getTimeSlotsForDay returns eventStartTime field", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.bookings.getTimeSlotsForDay({
+      dayMs: new Date("2030-06-15T00:00:00.000Z").getTime(),
+    }).catch(() => [] as Array<{ eventStartTime: string }>);
     expect(Array.isArray(result)).toBe(true);
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `bookings` ADD `eventStartTime` varchar(10);

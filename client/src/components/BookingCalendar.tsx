@@ -26,8 +26,9 @@ type CalendarEvent = {
   type: "booking" | "dmlv";
   id: number;
   title: string;
-  startTime: string;
-  endTime?: string | null;
+  eventStartTime?: string | null; // actual mass/event time
+  startTime: string;              // block start
+  endTime?: string | null;        // block end
   location?: string | null;
   status?: string;
 };
@@ -60,7 +61,7 @@ export default function BookingCalendar() {
       if (b.status === "rejected") continue;
       const key = format(new Date(b.eventDate), "yyyy-MM-dd");
       const events = map.get(key) ?? [];
-      events.push({ type: "booking", id: b.id, title: b.eventName, startTime: b.startTime, endTime: b.endTime, location: b.location, status: b.status });
+      events.push({ type: "booking", id: b.id, title: b.eventName, eventStartTime: b.eventStartTime, startTime: b.startTime, endTime: b.endTime, location: b.location, status: b.status });
       map.set(key, events);
     }
     for (const d of dmlvEvents) {
@@ -203,7 +204,12 @@ export default function BookingCalendar() {
                           : "bg-amber-500/15 text-amber-600 border-amber-500"
                       }`}
                     >
-                      {event.startTime && <span className="opacity-70 mr-0.5">{event.startTime}</span>}
+                      {/* Show event start time (mass time) prominently, not block start */}
+                      {(event.eventStartTime || event.startTime) && (
+                        <span className="opacity-80 mr-0.5 font-semibold">
+                          {event.eventStartTime ?? event.startTime}
+                        </span>
+                      )}
                       {event.title}
                     </div>
                   ))}
@@ -245,12 +251,19 @@ export default function BookingCalendar() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-['Be_Vietnam_Pro'] font-semibold text-foreground text-sm">{event.title}</p>
-                    <div className="flex items-center gap-1 mt-1 text-muted-foreground text-xs">
-                      <Clock className="w-3 h-3" />
-                      <span>
-                        {event.startTime}
-                        {event.endTime ? ` – ${event.endTime}` : ""}
-                      </span>
+                    <div className="flex flex-col gap-0.5 mt-1">
+                      {event.type === "booking" && event.eventStartTime && (
+                        <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
+                          <Clock className="w-3 h-3 text-[var(--gold)]" />
+                          <span>{lang === "vi" ? "Lễ:" : "Event:"} {event.eventStartTime}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 text-muted-foreground text-xs">
+                        <Clock className="w-3 h-3" />
+                        <span className="text-[10px]">
+                          {lang === "vi" ? "Khối:" : "Block:"} {event.startTime}{event.endTime ? `–${event.endTime}` : ""}
+                        </span>
+                      </div>
                     </div>
                     {event.location && (
                       <div className="flex items-center gap-1 mt-0.5 text-muted-foreground text-xs">

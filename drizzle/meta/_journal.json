@@ -15,6 +15,13 @@
       "when": 1771886413996,
       "tag": "0001_keen_wiccan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771891410955,
+      "tag": "0002_deep_blindfold",
+      "breakpoints": true
     }
   ]
 }

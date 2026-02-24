@@ -437,7 +437,12 @@ export default function Admin() {
                             <span>👤 {booking.requesterName}</span>
                             <span>📧 {booking.requesterEmail}</span>
                             <span>📅 {format(new Date(booking.eventDate), "dd/MM/yyyy")}</span>
-                            <span>⏰ {booking.startTime}{booking.endTime ? ` – ${booking.endTime}` : ""}</span>
+                            <span className="flex flex-col gap-0.5">
+                              {booking.eventStartTime && (
+                                <span className="text-foreground font-semibold">⛪ {lang === "vi" ? "Lễ" : "Event"}: {booking.eventStartTime}</span>
+                              )}
+                              <span className="text-[10px]">🕐 {lang === "vi" ? "Khối" : "Block"}: {booking.startTime}{booking.endTime ? `–${booking.endTime}` : ""}</span>
+                            </span>
                           </div>
                           {booking.location && <p className="text-xs text-muted-foreground mt-1 font-['Be_Vietnam_Pro']">📍 {booking.location}</p>}
                           {booking.notes && <p className="text-xs text-muted-foreground mt-1 font-['Be_Vietnam_Pro'] italic">"{booking.notes}"</p>}
