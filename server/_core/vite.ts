@@ -12,13 +12,8 @@ function getBaseDir(): string {
   if (process.env.NODE_ENV === "production") {
     return process.cwd();
   }
-  // In development, use import.meta for ESM
-  try {
-    const { fileURLToPath } = require("url");
-    return path.dirname(fileURLToPath(import.meta.url));
-  } catch {
-    return process.cwd();
-  }
+  // In development, always use process.cwd() which is the project root
+  return process.cwd();
 }
 
 export async function setupVite(app: Express, server: Server) {
@@ -43,7 +38,6 @@ export async function setupVite(app: Express, server: Server) {
       const baseDir = getBaseDir();
       const clientTemplate = path.resolve(
         baseDir,
-        "../..",
         "client",
         "index.html"
       );
@@ -67,7 +61,7 @@ export function serveStatic(app: Express) {
   const baseDir = getBaseDir();
   // In production, files are in dist/public relative to cwd
   const distPath = path.resolve(baseDir, "dist", "public");
-  
+
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
