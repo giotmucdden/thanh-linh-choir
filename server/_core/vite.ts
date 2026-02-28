@@ -3,8 +3,6 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
 // Get directory path - works in both development and production (bundled)
 function getBaseDir(): string {
@@ -17,6 +15,10 @@ function getBaseDir(): string {
 }
 
 export async function setupVite(app: Express, server: Server) {
+  // Dynamically import vite only in development to avoid bundling issues
+  const { createServer: createViteServer } = await import("vite");
+  const viteConfig = (await import("../../vite.config")).default;
+  
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
