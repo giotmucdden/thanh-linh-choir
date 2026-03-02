@@ -79,3 +79,13 @@
 - [x] Remove useAuth / getLoginUrl from all public pages
 - [x] Keep all public tRPC procedures as publicProcedure
 - [x] Update adminProcedure to use new JWT-based admin session
+
+## Liturgical Season Themes + Hero Video
+- [x] Create liturgical season detection utility (Advent, Christmas, Lent, Easter, Ordinary Time)
+- [x] Define CSS theme variables for each season (colors, gradients)
+- [x] Apply season theme via data-season attribute on html root
+- [x] Add season indicator badge to Navbar
+- [x] Replace hero static image with animated particle + season-tinted overlay
+- [x] Add season-tinted overlay on hero background
+- [x] SeasonContext with override/preview capability
+

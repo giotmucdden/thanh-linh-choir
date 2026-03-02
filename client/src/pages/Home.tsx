@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Music, Users, Calendar, Star, Phone, Mail, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/contexts/LangContext";
+import { useSeason } from "@/contexts/SeasonContext";
 import { t } from "@/lib/i18n";
 import PhotoGallery from "@/components/PhotoGallery";
 import BookingCalendar from "@/components/BookingCalendar";
 import DmlvEvents from "@/components/DmlvEvents";
+import HeroBackground from "@/components/HeroBackground";
 
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
@@ -32,33 +34,20 @@ function AnimatedSection({ children, className = "" }: { children: React.ReactNo
 
 export default function Home() {
   const { lang } = useLang();
+  const { theme } = useSeason();
   const [heroLoaded, setHeroLoaded] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setHeroLoaded(true), 100);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setHeroLoaded(true), 100);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
     <div className="min-h-screen bg-background">
       {/* ── Hero Section ─────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0">
-          <img
-            src="https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1920&h=1080&fit=crop"
-            alt="Choir background"
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[oklch(0.18_0.06_240)/80] via-[oklch(0.18_0.06_240)/70] to-[oklch(0.18_0.06_240)/90]" />
-          {/* Subtle pattern overlay */}
-          <div
-            className="absolute inset-0 opacity-5"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4af37' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            }}
-          />
-        </div>
+        {/* Animated season-aware background */}
+        <HeroBackground />
 
         {/* Hero content */}
         <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
@@ -69,6 +58,18 @@ export default function Home() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full border-2 border-[var(--gold)] bg-[var(--gold)/10] backdrop-blur-sm">
               <Music className="w-7 h-7 text-[var(--gold)]" />
             </div>
+          </div>
+
+          {/* Season indicator */}
+          <div
+            className={`mb-3 transition-all duration-700 delay-100 ${heroLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+          >
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-['Be_Vietnam_Pro'] font-medium border ${theme.badgeClass}`}
+            >
+              <span>{theme.icon}</span>
+              <span>{lang === "vi" ? theme.nameVi : theme.nameEn}</span>
+            </span>
           </div>
 
           <p
