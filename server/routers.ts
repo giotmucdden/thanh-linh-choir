@@ -4,6 +4,8 @@ import { SignJWT, jwtVerify } from "jose";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { notifyOwner } from "./_core/notification";
+import { sendEmail, buildAnnouncementEmailHtml, isEmailConfigured } from "./email";
+import { runReminderCheck } from "./reminderScheduler";
 import {
   createBooking,
   createChoirMember,
@@ -25,6 +27,13 @@ import {
   updateChoirMember,
   updateDmlvEvent,
   upsertBookingDetails,
+  createAnnouncement,
+  getAllAnnouncements,
+  getReminderLogs,
+  createPracticeSession,
+  getAllPracticeSessions,
+  updatePracticeSession,
+  deletePracticeSession,
 } from "./db";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -366,6 +375,132 @@ export const appRouter = router({
           await createReminder({ memberId: member.id, eventId: input.eventId, reminderType: "weekly", scheduledAt: oneWeekBefore, message: `[1 tuần trước] ${input.message}` });
         }
         return { success: true, membersNotified: members.length };
+      }),
+
+    /** Manually trigger a reminder check (admin) */
+    runNow: adminProcedure.mutation(async () => {
+      await runReminderCheck();
+      return { success: true };
+    }),
+
+    getLogs: adminProcedure
+      .input(z.object({ limit: z.number().min(1).max(200).default(100) }))
+      .query(({ input }) => getReminderLogs(input.limit)),
+
+    getEmailStatus: adminProcedure.query(() => ({
+      configured: isEmailConfigured(),
+      from: process.env.EMAIL_FROM ?? "(not set)",
+    })),
+  }),
+
+  // ── Announcements ─────────────────────────────────────────────────────────
+  announcements: router({
+    getAll: adminProcedure.query(() => getAllAnnouncements()),
+
+    send: adminProcedure
+      .input(z.object({
+        title: z.string().min(1),
+        body: z.string().min(1),
+        attachmentUrls: z.array(z.object({
+          url: z.string(),
+          key: z.string(),
+          name: z.string(),
+          type: z.string(),
+        })).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const members = await getAllChoirMembers();
+        const emailMembers = members.filter((m) => m.isActive && m.email?.includes("@"));
+
+        const html = buildAnnouncementEmailHtml({
+          title: input.title,
+          body: input.body,
+          attachments: input.attachmentUrls,
+        });
+
+        const emailAttachments = input.attachmentUrls?.map((a) => ({
+          filename: a.name,
+          url: a.url,
+        }));
+
+        let sentCount = 0;
+        for (const member of emailMembers) {
+          const ok = await sendEmail({
+            to: member.email!,
+            subject: `[Ca Đoàn Thánh Linh] ${input.title}`,
+            html,
+            attachments: emailAttachments,
+            eventType: "announcement",
+            reminderType: "announcement",
+            recipientName: member.name,
+          });
+          if (ok) sentCount++;
+        }
+
+        const id = await createAnnouncement({
+          title: input.title,
+          body: input.body,
+          attachmentUrls: input.attachmentUrls ? JSON.stringify(input.attachmentUrls) : null,
+          recipientCount: sentCount,
+          sentAt: Date.now(),
+        });
+
+        return { id, sentCount, totalMembers: emailMembers.length };
+      }),
+
+    uploadAttachment: adminProcedure
+      .input(z.object({ fileBase64: z.string(), fileName: z.string(), mimeType: z.string() }))
+      .mutation(async ({ input }) => {
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const ext = input.fileName.split(".").pop() ?? "bin";
+        const key = `announcements/${nanoid(12)}.${ext}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        return { url, key, name: input.fileName, type: input.mimeType };
+      }),
+  }),
+
+  // ── Practice Sessions ──────────────────────────────────────────────────────
+  practice: router({
+    getAll: publicProcedure.query(() => getAllPracticeSessions()),
+
+    create: adminProcedure
+      .input(z.object({
+        title: z.string().min(1),
+        titleVi: z.string().optional(),
+        description: z.string().optional(),
+        location: z.string().optional(),
+        sessionDate: z.number(),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await createPracticeSession(input);
+        return { id };
+      }),
+
+    update: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        titleVi: z.string().optional(),
+        description: z.string().optional(),
+        location: z.string().optional(),
+        sessionDate: z.number().optional(),
+        startTime: z.string().optional(),
+        endTime: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await updatePracticeSession(id, data);
+        return { success: true };
+      }),
+
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deletePracticeSession(input.id);
+        return { success: true };
       }),
   }),
 });

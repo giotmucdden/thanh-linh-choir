@@ -4,8 +4,11 @@ import { vi as viLocale } from "date-fns/locale";
 import {
   LayoutDashboard, Calendar, Users, Bell, LogOut, ChevronRight,
   CheckCircle, XCircle, Clock, Eye, FileText, Music2, Plus, Trash2,
-  Edit, Send, Shield
+  Edit, Send, Shield, Megaphone, Music, BarChart2
 } from "lucide-react";
+import AnnouncementsTab from "@/components/admin/AnnouncementsTab";
+import ReminderLogsTab from "@/components/admin/ReminderLogsTab";
+import PracticeSessionsTab from "@/components/admin/PracticeSessionsTab";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -272,7 +275,7 @@ function AdminLoginScreen({ lang }: { lang: "vi" | "en" }) {
 
 // ── Main Admin Page ───────────────────────────────────────────────────────────
 
-type AdminTab = "bookings" | "members" | "events" | "reminders";
+type AdminTab = "bookings" | "members" | "events" | "reminders" | "announcements" | "practice" | "email_logs";
 
 export default function Admin() {
   const { lang } = useLang();
@@ -361,7 +364,10 @@ export default function Admin() {
     { tab: "bookings", icon: Calendar, label: t(lang, "admin_bookings") },
     { tab: "members", icon: Users, label: t(lang, "admin_members") },
     { tab: "events", icon: Music2, label: t(lang, "admin_events") },
+    { tab: "practice", icon: Music, label: lang === "vi" ? "Lịch Tập" : "Practice" },
+    { tab: "announcements", icon: Megaphone, label: lang === "vi" ? "Thông Báo" : "Announcements" },
     { tab: "reminders", icon: Bell, label: t(lang, "admin_reminders") },
+    { tab: "email_logs", icon: BarChart2, label: lang === "vi" ? "Nhật Ký Email" : "Email Logs" },
   ];
 
   return (
@@ -686,37 +692,72 @@ export default function Admin() {
           <div>
             <div className="mb-8">
               <h1 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-1">{t(lang, "admin_reminders")}</h1>
-              <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">{lang === "vi" ? "Gửi nhắc nhở cho ca viên" : "Send reminders to choir members"}</p>
+              <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">{lang === "vi" ? "Hệ thống tự động gửi nhắc nhở qua email" : "Automated email reminder system"}</p>
             </div>
-            <Card className="border-border max-w-lg">
-              <CardHeader>
-                <CardTitle className="font-['Cormorant_Garamond'] text-xl">{lang === "vi" ? "Nhắc Nhở Tự Động" : "Automated Reminders"}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="font-['Be_Vietnam_Pro'] text-sm text-muted-foreground">
-                  {lang === "vi"
-                    ? "Hệ thống tự động gửi nhắc nhở cho tất cả ca viên 1 tuần và 1 ngày trước mỗi sự kiện ĐMLV. Để lên lịch nhắc nhở cho một sự kiện cụ thể, hãy vào tab Sự Kiện ĐMLV và nhấn nút Gửi Nhắc Nhở."
-                    : "The system automatically schedules reminders for all choir members 1 week and 1 day before each DMLV event. To schedule reminders for a specific event, go to the DMLV Events tab and click Send Reminders."}
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { icon: Bell, label: lang === "vi" ? "Nhắc nhở 1 tuần trước" : "1-week advance reminder", desc: lang === "vi" ? "Gửi cho tất cả ca viên" : "Sent to all choir members" },
-                    { icon: Bell, label: lang === "vi" ? "Nhắc nhở 1 ngày trước" : "1-day advance reminder", desc: lang === "vi" ? "Gửi cho tất cả ca viên" : "Sent to all choir members" },
-                  ].map(({ icon: Icon, label, desc }) => (
-                    <div key={label} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-                      <Icon className="w-4 h-4 text-[var(--gold)]" />
-                      <div>
-                        <p className="font-['Be_Vietnam_Pro'] text-sm font-medium text-foreground">{label}</p>
-                        <p className="font-['Be_Vietnam_Pro'] text-xs text-muted-foreground">{desc}</p>
-                      </div>
-                    </div>
-                  ))}
+            <div className="space-y-4 max-w-lg">
+              {[
+                { icon: Bell, label: lang === "vi" ? "Nhắc nhở 7 ngày trước" : "7-day advance reminder", desc: lang === "vi" ? "Gửi email cho tất cả ca viên" : "Email sent to all choir members" },
+                { icon: Bell, label: lang === "vi" ? "Nhắc nhở 1 ngày trước" : "1-day advance reminder", desc: lang === "vi" ? "Gửi email cho tất cả ca viên" : "Email sent to all choir members" },
+              ].map(({ icon: Icon, label, desc }) => (
+                <div key={label} className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border border-border">
+                  <Icon className="w-5 h-5 text-[var(--gold)]" />
+                  <div>
+                    <p className="font-['Be_Vietnam_Pro'] text-sm font-medium text-foreground">{label}</p>
+                    <p className="font-['Be_Vietnam_Pro'] text-xs text-muted-foreground">{desc}</p>
+                  </div>
                 </div>
-                <p className="font-['Be_Vietnam_Pro'] text-xs text-muted-foreground">
-                  {lang === "vi" ? `Hiện có ${members.length} ca viên trong hệ thống.` : `Currently ${members.length} choir members in the system.`}
-                </p>
-              </CardContent>
-            </Card>
+              ))}
+              <p className="font-['Be_Vietnam_Pro'] text-xs text-muted-foreground px-1">
+                {lang === "vi"
+                  ? `Hệ thống kiểm tra mỗi giờ. Hiện có ${members.length} ca viên. Xem lịch sử gửi email trong tab "Nhật Ký Email".`
+                  : `System checks hourly. Currently ${members.length} choir members. View send history in the "Email Logs" tab.`}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Announcements Tab ── */}
+        {activeTab === "announcements" && (
+          <div>
+            <div className="mb-8">
+              <h1 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-1">
+                {lang === "vi" ? "Thông Báo" : "Announcements"}
+              </h1>
+              <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">
+                {lang === "vi" ? "Soạn và gửi thông báo đến tất cả ca viên qua email" : "Compose and send announcements to all choir members via email"}
+              </p>
+            </div>
+            <AnnouncementsTab />
+          </div>
+        )}
+
+        {/* ── Practice Sessions Tab ── */}
+        {activeTab === "practice" && (
+          <div>
+            <div className="mb-8">
+              <h1 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-1">
+                {lang === "vi" ? "Lịch Tập Ca Đoàn" : "Practice Schedule"}
+              </h1>
+              <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">
+                {lang === "vi" ? "Quản lý lịch tập và nhắc nhở tự động cho ca viên" : "Manage practice sessions with automatic reminders"}
+              </p>
+            </div>
+            <PracticeSessionsTab />
+          </div>
+        )}
+
+        {/* ── Email Logs Tab ── */}
+        {activeTab === "email_logs" && (
+          <div>
+            <div className="mb-8">
+              <h1 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-1">
+                {lang === "vi" ? "Nhật Ký Email" : "Email Logs"}
+              </h1>
+              <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">
+                {lang === "vi" ? "Theo dõi lịch sử gửi email và trạng thái nhắc nhở" : "Track email send history and reminder status"}
+              </p>
+            </div>
+            <ReminderLogsTab />
           </div>
         )}
       </main>

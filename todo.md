@@ -89,3 +89,18 @@
 - [x] Add season-tinted overlay on hero background
 - [x] SeasonContext with override/preview capability
 
+
+## Email Notification System
+- [x] Add choirMembers table (name, email, phone, active)
+- [x] Add announcements table (title, body, attachmentUrls, sentAt, sentBy)
+- [x] Add reminderLogs table (eventType, eventId, recipientEmail, sentAt, status)
+- [x] Push DB migrations
+- [x] Add email service helper (Resend API)
+- [x] Add server-side reminder scheduler (cron-style: check every hour, send 7-day and 1-day reminders)
+- [x] Add admin.sendAnnouncement procedure (text + file/photo attachments via S3)
+- [x] Add admin.getMembers / addMember / toggleMember procedures
+- [x] Add admin.getReminderLogs / getAnnouncements procedures
+- [x] Build Admin Members tab UI
+- [x] Build Admin Announcements composer UI (text, file/photo upload)
+- [x] Build Admin Reminder Logs tab UI
+- [x] Write vitest tests for email procedures (26 tests passing)

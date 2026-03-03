@@ -22,6 +22,13 @@
       "when": 1771891410955,
       "tag": "0002_deep_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1772494712561,
+      "tag": "0003_outgoing_freak",
+      "breakpoints": true
     }
   ]
 }

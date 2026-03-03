@@ -231,3 +231,64 @@ export async function markReminderSent(id: number): Promise<void> {
   if (!db) throw new Error("Database not available");
   await db.update(reminders).set({ isSent: true, sentAt: Date.now() }).where(eq(reminders.id, id));
 }
+
+// ── Announcements ──────────────────────────────────────────────────────────
+import {
+  announcements,
+  reminderLogs,
+  practiceSessions,
+  InsertAnnouncement,
+  InsertReminderLog,
+  InsertPracticeSession,
+  PracticeSession,
+  ReminderLog,
+  Announcement,
+} from "../drizzle/schema";
+
+export async function createAnnouncement(data: InsertAnnouncement): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(announcements).values(data);
+  return (result as { insertId: number }).insertId;
+}
+
+export async function getAllAnnouncements(): Promise<Announcement[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(announcements).orderBy(announcements.createdAt);
+}
+
+// ── Reminder Logs ──────────────────────────────────────────────────────────
+
+export async function getReminderLogs(limit = 100): Promise<ReminderLog[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(reminderLogs).orderBy(reminderLogs.sentAt).limit(limit);
+}
+
+// ── Practice Sessions ──────────────────────────────────────────────────────
+
+export async function createPracticeSession(data: InsertPracticeSession): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(practiceSessions).values(data);
+  return (result as { insertId: number }).insertId;
+}
+
+export async function getAllPracticeSessions(): Promise<PracticeSession[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(practiceSessions).where(eq(practiceSessions.isActive, true)).orderBy(practiceSessions.sessionDate);
+}
+
+export async function updatePracticeSession(id: number, data: Partial<InsertPracticeSession>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(practiceSessions).set(data).where(eq(practiceSessions.id, id));
+}
+
+export async function deletePracticeSession(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(practiceSessions).set({ isActive: false }).where(eq(practiceSessions.id, id));
+}

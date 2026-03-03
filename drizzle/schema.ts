@@ -118,3 +118,53 @@ export const reminders = mysqlTable("reminders", {
 
 export type Reminder = typeof reminders.$inferSelect;
 export type InsertReminder = typeof reminders.$inferInsert;
+
+// Admin announcements (broadcast to all ca vien)
+export const announcements = mysqlTable("announcements", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  body: text("body").notNull(),
+  attachmentUrls: text("attachmentUrls"), // JSON array of { url, key, name, type }
+  recipientCount: int("recipientCount").default(0).notNull(),
+  sentAt: bigint("sentAt", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Announcement = typeof announcements.$inferSelect;
+export type InsertAnnouncement = typeof announcements.$inferInsert;
+
+// Reminder send log (tracks every email sent)
+export const reminderLogs = mysqlTable("reminder_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  eventType: mysqlEnum("eventType", ["booking", "dmlv", "announcement", "practice"]).notNull(),
+  eventId: int("eventId"),
+  recipientName: varchar("recipientName", { length: 255 }),
+  recipientEmail: varchar("recipientEmail", { length: 320 }).notNull(),
+  subject: varchar("subject", { length: 500 }),
+  reminderType: varchar("reminderType", { length: 50 }), // "7day", "1day", "announcement"
+  status: mysqlEnum("status", ["sent", "failed", "skipped"]).default("sent").notNull(),
+  errorMessage: text("errorMessage"),
+  sentAt: bigint("sentAt", { mode: "number" }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ReminderLog = typeof reminderLogs.$inferSelect;
+export type InsertReminderLog = typeof reminderLogs.$inferInsert;
+
+// Practice sessions
+export const practiceSessions = mysqlTable("practice_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  titleVi: varchar("titleVi", { length: 255 }),
+  description: text("description"),
+  location: varchar("location", { length: 255 }).default("Phòng tập ca đoàn"),
+  sessionDate: bigint("sessionDate", { mode: "number" }).notNull(),
+  startTime: varchar("startTime", { length: 10 }).notNull(),
+  endTime: varchar("endTime", { length: 10 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PracticeSession = typeof practiceSessions.$inferSelect;
+export type InsertPracticeSession = typeof practiceSessions.$inferInsert;
