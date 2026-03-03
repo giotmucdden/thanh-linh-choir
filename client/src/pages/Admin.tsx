@@ -205,16 +205,13 @@ function BookingDetailsForm({ bookingId, onClose }: { bookingId: number; onClose
 
 // ── Admin Login Screen ──────────────────────────────────────────────────────
 
-function AdminLoginScreen({ lang }: { lang: "vi" | "en" }) {
+function AdminLoginScreen({ lang, onLoginSuccess }: { lang: "vi" | "en"; onLoginSuccess: () => void }) {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const utils = trpc.useUtils();
-  const [, navigate] = useLocation();
   const login = trpc.admin.login.useMutation({
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success(lang === "vi" ? "Đăng nhập thành công" : "Logged in successfully");
-      // Force a full refetch of the admin check query so the dashboard renders immediately
-      await utils.admin.check.refetch();
+      onLoginSuccess();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -281,7 +278,7 @@ type AdminTab = "bookings" | "members" | "events" | "reminders" | "announcements
 
 export default function Admin() {
   const { lang } = useLang();
-  const { user, isAuthenticated, loading, logout } = useAuth();
+  const { isAuthenticated, loading, logout, refresh } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>("bookings");
   const [detailsBookingId, setDetailsBookingId] = useState<number | null>(null);
   const [rejectBookingId, setRejectBookingId] = useState<number | null>(null);
@@ -337,25 +334,10 @@ export default function Admin() {
   }
 
   if (!isAuthenticated) {
-    return <AdminLoginScreen lang={lang} />;
+    return <AdminLoginScreen lang={lang} onLoginSuccess={refresh} />;
   }
 
-  if (user?.role !== "admin") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
-          <h2 className="font-['Cormorant_Garamond'] text-2xl text-foreground mb-2">
-            {lang === "vi" ? "Không có quyền truy cập" : "Access Denied"}
-          </h2>
-          <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm mb-4">
-            {lang === "vi" ? "Bạn không có quyền admin." : "You do not have admin privileges."}
-          </p>
-          <Link href="/" className="font-['Be_Vietnam_Pro'] text-sm text-[var(--gold)] hover:underline">← {t(lang, "back")}</Link>
-        </div>
-      </div>
-    );
-  }
+  // isAuthenticated already implies admin role (admin.check returns isAdmin=true only for valid admin cookie)
 
   // Stats
   const pendingCount = bookings.filter((b) => b.status === "pending").length;

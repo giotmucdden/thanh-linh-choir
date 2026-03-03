@@ -107,3 +107,7 @@
 
 ## Bug Fix: Admin Login Redirect
 - [x] After successful password login, navigate to admin dashboard (not stay on login screen)
+
+## Bug Fix: Admin Login Dashboard Not Loading (Deep Fix)
+- [ ] Debug admin.check cookie/session after login
+- [ ] Fix Admin component to re-render dashboard after login without reload
