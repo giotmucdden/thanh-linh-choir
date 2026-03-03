@@ -212,9 +212,9 @@ function AdminLoginScreen({ lang }: { lang: "vi" | "en" }) {
   const [, navigate] = useLocation();
   const login = trpc.admin.login.useMutation({
     onSuccess: async () => {
-      await utils.admin.check.invalidate();
       toast.success(lang === "vi" ? "Đăng nhập thành công" : "Logged in successfully");
-      navigate("/admin");
+      // Force a full refetch of the admin check query so the dashboard renders immediately
+      await utils.admin.check.refetch();
     },
     onError: (e) => toast.error(e.message),
   });

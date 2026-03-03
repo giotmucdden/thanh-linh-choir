@@ -10,8 +10,8 @@ export function useAuth() {
 
   const checkQuery = trpc.admin.check.useQuery(undefined, {
     retry: false,
-    refetchOnWindowFocus: false,
-    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const logoutMutation = trpc.admin.logout.useMutation({
