@@ -24,7 +24,7 @@ import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
@@ -209,10 +209,12 @@ function AdminLoginScreen({ lang }: { lang: "vi" | "en" }) {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
   const login = trpc.admin.login.useMutation({
-    onSuccess: () => {
-      utils.admin.check.invalidate();
+    onSuccess: async () => {
+      await utils.admin.check.invalidate();
       toast.success(lang === "vi" ? "Đăng nhập thành công" : "Logged in successfully");
+      navigate("/admin");
     },
     onError: (e) => toast.error(e.message),
   });

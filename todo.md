@@ -104,3 +104,6 @@
 - [x] Build Admin Announcements composer UI (text, file/photo upload)
 - [x] Build Admin Reminder Logs tab UI
 - [x] Write vitest tests for email procedures (26 tests passing)
+
+## Bug Fix: Admin Login Redirect
+- [x] After successful password login, navigate to admin dashboard (not stay on login screen)
