@@ -28,8 +28,8 @@ describe("admin.login", () => {
   it("accepts correct password and sets cookie", async () => {
     const { ctx, headers } = createCtx();
     const caller = appRouter.createCaller(ctx);
-    // Use the default password from routers.ts
-    const result = await caller.admin.login({ password: "ThanhLinh2024!" });
+    // Use the password from env or fallback to default
+    const result = await caller.admin.login({ password: process.env.ADMIN_PASSWORD ?? "ThanhLinh2024!" });
     expect(result).toEqual({ success: true });
     expect(headers.length).toBeGreaterThan(0);
     expect(headers[0]).toContain("choir_admin_session");

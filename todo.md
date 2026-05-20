@@ -111,3 +111,11 @@
 ## Bug Fix: Admin Login Dashboard Not Loading (Deep Fix)
 - [ ] Debug admin.check cookie/session after login
 - [ ] Fix Admin component to re-render dashboard after login without reload
+
+## Excel Import/Export for Choir Members
+- [x] Install xlsx (SheetJS) library
+- [x] Add server endpoint: export members as .xlsx file
+- [x] Add server endpoint: import members from uploaded .xlsx file
+- [x] Build admin UI: Export button to download Excel
+- [x] Build admin UI: Import dialog with file upload and clipboard paste support
+- [x] Handle duplicate detection on import (by email)

@@ -49,7 +49,7 @@ describe("admin.login", () => {
       req: { protocol: "https", headers: {} } as TrpcContext["req"],
       res: { setHeader: (_n: string, v: string) => headers.push(v), clearCookie: () => {} } as unknown as TrpcContext["res"],
     };
-    const result = await appRouter.createCaller(ctx).admin.login({ password: "ThanhLinh2024!" });
+    const result = await appRouter.createCaller(ctx).admin.login({ password: process.env.ADMIN_PASSWORD ?? "ThanhLinh2024!" });
     expect(result).toEqual({ success: true });
     expect(headers.some((h) => h.includes("choir_admin_session"))).toBe(true);
   });

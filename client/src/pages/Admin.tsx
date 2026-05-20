@@ -4,7 +4,7 @@ import { vi as viLocale } from "date-fns/locale";
 import {
   LayoutDashboard, Calendar, Users, Bell, LogOut, ChevronRight,
   CheckCircle, XCircle, Clock, Eye, FileText, Music2, Plus, Trash2,
-  Edit, Send, Shield, Megaphone, Music, BarChart2
+  Edit, Send, Shield, Megaphone, Music, BarChart2, Download, Upload
 } from "lucide-react";
 import AnnouncementsTab from "@/components/admin/AnnouncementsTab";
 import ReminderLogsTab from "@/components/admin/ReminderLogsTab";
@@ -284,6 +284,8 @@ export default function Admin() {
   const [rejectBookingId, setRejectBookingId] = useState<number | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
   const [showAddMember, setShowAddMember] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newMember, setNewMember] = useState({ name: "", email: "", phone: "", voicePart: "soprano" as "soprano" | "alto" | "tenor" | "bass" });
   const [newEvent, setNewEvent] = useState({ title: "", titleVi: "", description: "", location: "Nhà thờ Đức Mẹ La Vang", eventDate: "", startTime: "08:00", endTime: "10:00", isRecurring: false });
@@ -543,13 +545,46 @@ export default function Admin() {
                 <h1 className="font-['Cormorant_Garamond'] text-3xl font-semibold text-foreground mb-1">{t(lang, "admin_members")}</h1>
                 <p className="font-['Be_Vietnam_Pro'] text-muted-foreground text-sm">{lang === "vi" ? "Danh sách ca viên" : "Choir member directory"}</p>
               </div>
-              <Button
-                className="bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold gap-1"
-                onClick={() => setShowAddMember(true)}
-              >
-                <Plus className="w-4 h-4" />
-                {t(lang, "add")}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="font-['Be_Vietnam_Pro'] font-medium gap-1 text-sm"
+                  onClick={async () => {
+                    try {
+                      const result = await utils.client.choirMembers.exportExcel.query();
+                      const byteArray = Uint8Array.from(atob(result.base64), c => c.charCodeAt(0));
+                      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = result.filename;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success(lang === "vi" ? "Đã xuất file Excel" : "Excel exported successfully");
+                    } catch (e: any) {
+                      toast.error(e.message ?? "Export failed");
+                    }
+                  }}
+                >
+                  <Download className="w-4 h-4" />
+                  {lang === "vi" ? "Xuất Excel" : "Export"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="font-['Be_Vietnam_Pro'] font-medium gap-1 text-sm"
+                  onClick={() => { setShowImportDialog(true); setImportResult(null); }}
+                >
+                  <Upload className="w-4 h-4" />
+                  {lang === "vi" ? "Nhập Excel" : "Import"}
+                </Button>
+                <Button
+                  className="bg-[var(--gold)] text-[oklch(0.15_0.03_240)] hover:bg-[var(--gold-light)] font-['Be_Vietnam_Pro'] font-semibold gap-1"
+                  onClick={() => setShowAddMember(true)}
+                >
+                  <Plus className="w-4 h-4" />
+                  {t(lang, "add")}
+                </Button>
+              </div>
             </div>
 
             {membersLoading ? (
@@ -832,6 +867,135 @@ export default function Admin() {
               disabled={!newMember.name || createMember.isPending}
             >
               {t(lang, "add")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Import Excel Dialog ── */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-['Cormorant_Garamond'] text-xl">{lang === "vi" ? "Nhập Ca Viên từ Excel" : "Import Members from Excel"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="font-['Be_Vietnam_Pro'] text-sm text-muted-foreground">
+              {lang === "vi"
+                ? "Tải lên file Excel (.xlsx) hoặc dán dữ liệu từ Google Sheets. Cột bắt buộc: Tên / Name. Cột tùy chọn: Email, Điện thoại / Phone, Bè / Voice Part."
+                : "Upload an Excel file (.xlsx) or paste data from Google Sheets. Required column: Name. Optional: Email, Phone, Voice Part."}
+            </p>
+            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-[var(--gold)/50] transition-colors">
+              <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+              <p className="font-['Be_Vietnam_Pro'] text-sm text-muted-foreground mb-3">
+                {lang === "vi" ? "Kéo thả file hoặc nhấn để chọn" : "Drag & drop or click to select"}
+              </p>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                id="import-file-input"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const arrayBuf = await file.arrayBuffer();
+                    const base64 = btoa(Array.from(new Uint8Array(arrayBuf), b => String.fromCharCode(b)).join(''));
+                    const result = await utils.client.choirMembers.importExcel.mutate({ fileBase64: base64 });
+                    setImportResult(result);
+                    utils.choirMembers.getAll.invalidate();
+                    toast.success(lang === "vi" ? `Đã nhập ${result.imported} ca viên` : `Imported ${result.imported} members`);
+                  } catch (err: any) {
+                    toast.error(err.message ?? "Import failed");
+                  }
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                variant="outline"
+                className="font-['Be_Vietnam_Pro'] text-sm"
+                onClick={() => document.getElementById('import-file-input')?.click()}
+              >
+                {lang === "vi" ? "Chọn file Excel" : "Choose Excel File"}
+              </Button>
+            </div>
+
+            {/* Paste from clipboard section */}
+            <div>
+              <Label className="font-['Be_Vietnam_Pro'] text-sm font-medium">
+                {lang === "vi" ? "Hoặc dán dữ liệu từ Google Sheets (tab-separated):" : "Or paste data from Google Sheets (tab-separated):"}
+              </Label>
+              <Textarea
+                className="mt-2 font-['Be_Vietnam_Pro'] text-sm font-mono resize-none"
+                rows={5}
+                placeholder={lang === "vi" ? "Nguyễn Văn A\ta@email.com\t0901234567\tsoprano\nTrần Thị B\tb@email.com\t0907654321\talto" : "John Doe\tjohn@email.com\t0901234567\tsoprano\nJane Smith\tjane@email.com\t0907654321\talto"}
+                id="paste-import-area"
+              />
+              <Button
+                variant="outline"
+                className="mt-2 font-['Be_Vietnam_Pro'] text-sm gap-1"
+                onClick={async () => {
+                  const textarea = document.getElementById('paste-import-area') as HTMLTextAreaElement;
+                  const text = textarea?.value?.trim();
+                  if (!text) { toast.error(lang === "vi" ? "Không có dữ liệu" : "No data to import"); return; }
+                  try {
+                    // Convert tab-separated text to a simple xlsx
+                    const lines = text.split('\n').filter(l => l.trim());
+                    const rows = lines.map(line => {
+                      const cols = line.split('\t');
+                      return {
+                        "Tên / Name": cols[0]?.trim() ?? "",
+                        "Email": cols[1]?.trim() ?? "",
+                        "Điện thoại / Phone": cols[2]?.trim() ?? "",
+                        "Bè / Voice Part": cols[3]?.trim() ?? "soprano",
+                      };
+                    });
+                    // Use xlsx on client side to create a buffer
+                    const XLSX = await import('xlsx');
+                    const ws = XLSX.utils.json_to_sheet(rows);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Import');
+                    const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+                    const base64 = btoa(Array.from(new Uint8Array(buf), b => String.fromCharCode(b)).join(''));
+                    const result = await utils.client.choirMembers.importExcel.mutate({ fileBase64: base64 });
+                    setImportResult(result);
+                    utils.choirMembers.getAll.invalidate();
+                    toast.success(lang === "vi" ? `Đã nhập ${result.imported} ca viên` : `Imported ${result.imported} members`);
+                    textarea.value = "";
+                  } catch (err: any) {
+                    toast.error(err.message ?? "Import failed");
+                  }
+                }}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                {lang === "vi" ? "Nhập từ dữ liệu dán" : "Import from pasted data"}
+              </Button>
+            </div>
+
+            {/* Import results */}
+            {importResult && (
+              <div className="rounded-lg bg-muted p-4 space-y-1">
+                <p className="font-['Be_Vietnam_Pro'] text-sm font-semibold text-green-600">
+                  ✓ {lang === "vi" ? `Đã nhập: ${importResult.imported} ca viên` : `Imported: ${importResult.imported} members`}
+                </p>
+                {importResult.skipped > 0 && (
+                  <p className="font-['Be_Vietnam_Pro'] text-sm text-amber-600">
+                    ⚠ {lang === "vi" ? `Bỏ qua (trùng email): ${importResult.skipped}` : `Skipped (duplicate email): ${importResult.skipped}`}
+                  </p>
+                )}
+                {importResult.errors.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-['Be_Vietnam_Pro'] text-sm text-red-500 font-medium">{lang === "vi" ? "Lỗi:" : "Errors:"}</p>
+                    {importResult.errors.slice(0, 5).map((err, i) => (
+                      <p key={i} className="font-['Be_Vietnam_Pro'] text-xs text-red-400">{err}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImportDialog(false)} className="font-['Be_Vietnam_Pro']">
+              {lang === "vi" ? "Đóng" : "Close"}
             </Button>
           </DialogFooter>
         </DialogContent>

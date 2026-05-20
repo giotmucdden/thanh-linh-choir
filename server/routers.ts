@@ -349,6 +349,81 @@ export const appRouter = router({
         await deleteChoirMember(input.id);
         return { success: true };
       }),
+
+    /** Export all members as Excel base64 */
+    exportExcel: adminProcedure.query(async () => {
+      const XLSX = await import("xlsx");
+      const members = await getAllChoirMembers();
+      const rows = members.map((m) => ({
+        "Tên / Name": m.name,
+        "Email": m.email ?? "",
+        "Điện thoại / Phone": m.phone ?? "",
+        "Bè / Voice Part": m.voicePart ?? "soprano",
+        "Hoạt động / Active": m.isActive ? "Yes" : "No",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 10 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Ca Viên");
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      return { base64: Buffer.from(buf).toString("base64"), filename: `ca-vien-thanh-linh-${new Date().toISOString().slice(0, 10)}.xlsx` };
+    }),
+
+    /** Import members from Excel base64 data */
+    importExcel: adminProcedure
+      .input(z.object({ fileBase64: z.string() }))
+      .mutation(async ({ input }) => {
+        const XLSX = await import("xlsx");
+        const buf = Buffer.from(input.fileBase64, "base64");
+        const wb = XLSX.read(buf, { type: "buffer" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        if (!ws) throw new TRPCError({ code: "BAD_REQUEST", message: "File Excel không hợp lệ / Invalid Excel file" });
+        const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+        const existingMembers = await getAllChoirMembers();
+        const existingEmails = new Set(existingMembers.map((m) => m.email?.toLowerCase()).filter(Boolean));
+
+        let imported = 0;
+        let skipped = 0;
+        const errors: string[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          // Support both Vietnamese and English column headers
+          const name = (row["Tên / Name"] ?? row["Name"] ?? row["Tên"] ?? row["name"] ?? "").trim();
+          const email = (row["Email"] ?? row["email"] ?? "").trim();
+          const phone = (row["Điện thoại / Phone"] ?? row["Phone"] ?? row["Điện thoại"] ?? row["phone"] ?? "").trim();
+          const voicePartRaw = (row["Bè / Voice Part"] ?? row["Voice Part"] ?? row["Bè"] ?? row["voicePart"] ?? "").trim().toLowerCase();
+          const activeRaw = (row["Hoạt động / Active"] ?? row["Active"] ?? row["active"] ?? "yes").trim().toLowerCase();
+
+          if (!name) {
+            errors.push(`Row ${i + 2}: Missing name`);
+            continue;
+          }
+
+          // Skip duplicates by email
+          if (email && existingEmails.has(email.toLowerCase())) {
+            skipped++;
+            continue;
+          }
+
+          const voicePart = (["soprano", "alto", "tenor", "bass"].includes(voicePartRaw) ? voicePartRaw : "soprano") as "soprano" | "alto" | "tenor" | "bass";
+
+          await createChoirMember({
+            name,
+            email: email || undefined,
+            phone: phone || undefined,
+            voicePart,
+          });
+
+          if (email) existingEmails.add(email.toLowerCase());
+          imported++;
+        }
+
+        return { imported, skipped, errors, totalRows: rows.length };
+      }),
   }),
 
   // ── Reminders ─────────────────────────────────────────────────────────────
