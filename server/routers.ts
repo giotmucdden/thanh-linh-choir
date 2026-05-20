@@ -93,16 +93,18 @@ export const appRouter = router({
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Mật khẩu không đúng / Incorrect password" });
         }
         const token = await signAdminToken();
-        const isProduction = process.env.NODE_ENV === "production";
+        // Use SameSite=None; Secure for HTTPS (proxy/production), Lax for local HTTP
+        const isSecure = ctx.req.protocol === "https" || ctx.req.headers["x-forwarded-proto"]?.toString().includes("https");
         ctx.res.setHeader(
           "Set-Cookie",
-          `${ADMIN_COOKIE}=${token}; Path=/; HttpOnly; SameSite=${isProduction ? "None" : "Lax"}; Max-Age=${7 * 24 * 3600}${isProduction ? "; Secure" : ""}`
+          `${ADMIN_COOKIE}=${token}; Path=/; HttpOnly; SameSite=${isSecure ? "None" : "Lax"}; Max-Age=${7 * 24 * 3600}${isSecure ? "; Secure" : ""}`
         );
         return { success: true };
       }),
 
     logout: publicProcedure.mutation(({ ctx }) => {
-      ctx.res.setHeader("Set-Cookie", `${ADMIN_COOKIE}=; Path=/; HttpOnly; Max-Age=0`);
+      const isSecure = ctx.req.protocol === "https" || ctx.req.headers["x-forwarded-proto"]?.toString().includes("https");
+      ctx.res.setHeader("Set-Cookie", `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=${isSecure ? "None" : "Lax"}; Max-Age=0${isSecure ? "; Secure" : ""}`);
       return { success: true };
     }),
 

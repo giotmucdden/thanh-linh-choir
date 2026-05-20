@@ -210,8 +210,8 @@ function AdminLoginScreen({ lang, onLoginSuccess }: { lang: "vi" | "en"; onLogin
   const [showPw, setShowPw] = useState(false);
   const login = trpc.admin.login.useMutation({
     onSuccess: () => {
-      toast.success(lang === "vi" ? "Đăng nhập thành công" : "Logged in successfully");
-      onLoginSuccess();
+      // Force hard navigation to /admin to pick up the new admin cookie
+      window.location.href = '/admin';
     },
     onError: (e) => toast.error(e.message),
   });
